@@ -40,4 +40,3 @@ PledgePool.sol 是 Pledge 项目的核心智能合约之一，主要功能包括
 - **事件**:如 DepositLend、RefundLend、ClaimLend 等，用于记录用户操作。
 - **函数**: 如 DepositLend、refundLend、claimLend 等，实现具体的业务逻辑。
 
-:writing_hand: 作业地址：在 #:white_check_mark:-pledge作业 晒结果
