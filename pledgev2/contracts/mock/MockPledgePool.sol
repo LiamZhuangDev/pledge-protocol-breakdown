@@ -8,10 +8,11 @@ import "../library/SafeTransfer.sol";
 import "../interface/IDebtToken.sol";
 import "../interface/IBscPledgeOracle.sol";
 import "../interface/IUniswapV2Router02.sol";
+import "../multiSignature/multiSignatureClient.sol";
 
 
 
-contract MockPledgePool is ReentrancyGuard, Ownable, SafeTransfer{
+contract MockPledgePool is ReentrancyGuard, Ownable, SafeTransfer, multiSignatureClient{
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -103,11 +104,13 @@ contract MockPledgePool is ReentrancyGuard, Ownable, SafeTransfer{
     constructor(
         address _oracle,
         address _swapRouter,
-        address payable _feeAddress
-    ) public {
+        address payable _feeAddress,
+        address _multiSignature
+    ) public multiSignatureClient(_multiSignature) {
         require(_oracle != address(0), "Is zero address");
         require(_swapRouter != address(0), "Is zero address");
         require(_feeAddress != address(0), "Is zero address");
+        require(_multiSignature != address(0), "Is zero address");
 
         oracle = IBscPledgeOracle(_oracle);
         swapRouter = _swapRouter;

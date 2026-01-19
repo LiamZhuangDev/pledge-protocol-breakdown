@@ -19,8 +19,8 @@ async function initWETH() {
 
 
 async function initRouter(factory, weth) {
-    const Rounter = await ethers.getContractFactory("UniswapV2Router02");
-    router = await Rounter.deploy(factory.address, weth.address)
+    const Router = await ethers.getContractFactory("UniswapV2Router02");
+    router = await Router.deploy(factory.address, weth.address)
     return router
 }
 
@@ -54,5 +54,7 @@ module.exports = {
     initWETH,
     initFactory,
     initRouter,
+    initBusd,
+    initBtc,
     initAll
 };

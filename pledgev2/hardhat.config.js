@@ -1,9 +1,13 @@
 require("@nomicfoundation/hardhat-ignition");
 require("@nomiclabs/hardhat-ethers");
+require("@nomiclabs/hardhat-web3");
 require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
+  mocha: {
+    timeout: 100000
+  },
   networks: {
     bscTestnet: {
       url: "https://data-seed-prebsc-1-s1.binance.org:8545",
