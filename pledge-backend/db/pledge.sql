@@ -6,6 +6,12 @@
 -- 生成日期： 2022-03-09 16:31:47
 -- 服务器版本： 5.7.34-log
 -- PHP 版本： 7.3.31
+--
+-- ============================================================
+-- 业务说明：Pledger 质押借贷平台数据库
+-- 数据库： pledge_v21
+-- 主要业务：管理员、多签配置、借贷池、池子结算/清算数据、代币信息
+-- ============================================================
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -25,13 +31,14 @@ SET time_zone = "+00:00";
 
 --
 -- 表的结构 `admin`
+-- 业务：后台管理员账号，用于登录管理后台
 --
 
 CREATE TABLE `admin` (
-  `user_id` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `password` varchar(100) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+  `user_id` int(11) NOT NULL COMMENT '管理员ID',
+  `name` varchar(100) NOT NULL COMMENT '登录用户名',
+  `password` varchar(100) NOT NULL COMMENT 'bcrypt 加密后的密码'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='后台管理员表';
 
 --
 -- 转存表中的数据 `admin`
@@ -44,23 +51,24 @@ INSERT INTO `admin` (`user_id`, `name`, `password`) VALUES
 
 --
 -- 表的结构 `multi_sign`
+-- 业务：多签账户配置。SP(Service Provider) 与 JP(Joint Party) 共同参与多签，用于池子资金/清算等链上操作
 --
 
 CREATE TABLE `multi_sign` (
   `id` int(10) UNSIGNED NOT NULL,
-  `sp_name` varchar(255) DEFAULT NULL,
-  `sp_token` varchar(255) DEFAULT NULL,
-  `jp_name` varchar(255) DEFAULT NULL,
-  `jp_token` varchar(255) DEFAULT NULL,
-  `sp_address` varchar(255) DEFAULT NULL,
-  `jp_address` varchar(255) DEFAULT NULL,
-  `sp_hash` varchar(255) DEFAULT NULL,
-  `jp_hash` varchar(255) DEFAULT NULL,
-  `multi_sign_account` varchar(255) DEFAULT NULL,
-  `chain_id` int(10) DEFAULT NULL,
+  `sp_name` varchar(255) DEFAULT NULL COMMENT 'SP 名称',
+  `sp_token` varchar(255) DEFAULT NULL COMMENT 'SP 标识/token',
+  `jp_name` varchar(255) DEFAULT NULL COMMENT 'JP 名称',
+  `jp_token` varchar(255) DEFAULT NULL COMMENT 'JP 标识/token',
+  `sp_address` varchar(255) DEFAULT NULL COMMENT 'SP 链上地址',
+  `jp_address` varchar(255) DEFAULT NULL COMMENT 'JP 链上地址',
+  `sp_hash` varchar(255) DEFAULT NULL COMMENT 'SP 相关哈希(如部署/配置)',
+  `jp_hash` varchar(255) DEFAULT NULL COMMENT 'JP 相关哈希',
+  `multi_sign_account` varchar(255) DEFAULT NULL COMMENT '多签账户地址列表 JSON 数组',
+  `chain_id` int(10) DEFAULT NULL COMMENT '链 ID，如 56=BSC 主网 97=BSC 测试网',
   `created_at` date DEFAULT NULL,
   `updated_at` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='多签账户配置表(按链)';
 
 --
 -- 转存表中的数据 `multi_sign`
@@ -74,32 +82,33 @@ INSERT INTO `multi_sign` (`id`, `sp_name`, `sp_token`, `jp_name`, `jp_token`, `s
 
 --
 -- 表的结构 `poolbases`
+-- 业务：借贷池主表。每个池子定义一种「抵押资产-借出资产」组合、利率、期限、清算阈值等；state 表示池子状态(如 0未开 1进行中 2已结算 3清算中 4未开等)
 --
 
 CREATE TABLE `poolbases` (
   `id` int(11) NOT NULL,
-  `settle_time` varchar(100) DEFAULT NULL,
-  `end_time` varchar(100) DEFAULT NULL,
-  `interest_rate` varchar(100) DEFAULT NULL,
-  `max_supply` varchar(100) DEFAULT NULL,
-  `lend_supply` varchar(100) DEFAULT NULL,
-  `borrow_supply` varchar(100) DEFAULT NULL,
-  `martgage_rate` varchar(100) DEFAULT NULL,
-  `lend_token` varchar(100) DEFAULT NULL,
-  `borrow_token` varchar(100) DEFAULT NULL,
-  `state` varchar(100) DEFAULT NULL,
-  `jp_coin` varchar(100) DEFAULT NULL,
-  `sp_coin` varchar(100) DEFAULT NULL,
-  `auto_liquidate_threshold` varchar(100) DEFAULT NULL,
+  `settle_time` varchar(100) DEFAULT NULL COMMENT '结算开始时间戳',
+  `end_time` varchar(100) DEFAULT NULL COMMENT '池子结束时间戳',
+  `interest_rate` varchar(100) DEFAULT NULL COMMENT '利率(精度值，如 10000000 表示 1%)',
+  `max_supply` varchar(100) DEFAULT NULL COMMENT '池子最大可借/可存额度(最小单位)',
+  `lend_supply` varchar(100) DEFAULT NULL COMMENT '当前已借出(贷方)总量',
+  `borrow_supply` varchar(100) DEFAULT NULL COMMENT '当前已借入(借方)总量',
+  `martgage_rate` varchar(100) DEFAULT NULL COMMENT '抵押率(精度值，如 10000000=100%)',
+  `lend_token` varchar(100) DEFAULT NULL COMMENT '借出资产合约地址(用户借出的币)',
+  `borrow_token` varchar(100) DEFAULT NULL COMMENT '抵押/借入资产合约地址(用户抵押的币)',
+  `state` varchar(100) DEFAULT NULL COMMENT '池子状态: 0未开启 1进行中 2已结算 3清算中 4未开启等',
+  `jp_coin` varchar(100) DEFAULT NULL COMMENT 'JP 侧池子代币/合约地址',
+  `sp_coin` varchar(100) DEFAULT NULL COMMENT 'SP 侧池子代币/合约地址',
+  `auto_liquidate_threshold` varchar(100) DEFAULT NULL COMMENT '自动清算阈值(精度值)',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
-  `pool_id` int(11) DEFAULT NULL,
-  `borrow_token_info` json DEFAULT NULL,
-  `lend_token_info` json DEFAULT NULL,
-  `chain_id` varchar(20) DEFAULT '56',
-  `lend_token_symbol` varchar(100) DEFAULT NULL,
-  `borrow_token_symbol` varchar(100) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='poolbase';
+  `pool_id` int(11) DEFAULT NULL COMMENT '业务池子 ID，与链上 pool 对应',
+  `borrow_token_info` json DEFAULT NULL COMMENT '借入(抵押)代币信息: tokenName, tokenLogo, tokenPrice, borrowFee 等',
+  `lend_token_info` json DEFAULT NULL COMMENT '借出代币信息: tokenName, tokenLogo, tokenPrice, lendFee 等',
+  `chain_id` varchar(20) DEFAULT '56' COMMENT '链 ID: 56=BSC 主网 97=BSC 测试网',
+  `lend_token_symbol` varchar(100) DEFAULT NULL COMMENT '借出代币符号，如 BUSD',
+  `borrow_token_symbol` varchar(100) DEFAULT NULL COMMENT '抵押/借入代币符号，如 BTC'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='借贷池主表(按链+pool_id)';
 
 --
 -- 转存表中的数据 `poolbases`
@@ -162,21 +171,22 @@ INSERT INTO `poolbases` (`id`, `settle_time`, `end_time`, `interest_rate`, `max_
 
 --
 -- 表的结构 `pooldata`
+-- 业务：池子结算与清算数据。记录每个池子的结算金额、完成金额、清算金额(借出/借入两侧)，与 poolbases 通过 chain_id+pool_id 关联
 --
 
 CREATE TABLE `pooldata` (
-  `settle_amount_lend` varchar(100) DEFAULT NULL,
-  `settle_amount_borrow` varchar(100) DEFAULT NULL,
-  `finish_amount_lend` varchar(100) DEFAULT NULL,
-  `finish_amount_borrow` varchar(100) DEFAULT NULL,
-  `liquidation_amoun_lend` varchar(100) DEFAULT NULL,
-  `liquidation_amoun_borrow` varchar(100) DEFAULT NULL,
+  `settle_amount_lend` varchar(100) DEFAULT NULL COMMENT '结算时借出侧(贷方)金额',
+  `settle_amount_borrow` varchar(100) DEFAULT NULL COMMENT '结算时借入侧(抵押)金额',
+  `finish_amount_lend` varchar(100) DEFAULT NULL COMMENT '已完成/归还的借出侧金额',
+  `finish_amount_borrow` varchar(100) DEFAULT NULL COMMENT '已完成/归还的借入侧金额',
+  `liquidation_amoun_lend` varchar(100) DEFAULT NULL COMMENT '清算产生的借出侧金额',
+  `liquidation_amoun_borrow` varchar(100) DEFAULT NULL COMMENT '清算产生的借入侧金额',
   `updated_at` datetime DEFAULT NULL,
   `created_at` datetime DEFAULT NULL,
   `id` int(11) NOT NULL,
-  `chain_id` varchar(20) DEFAULT '56',
-  `pool_id` varchar(50) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='pooldata';
+  `chain_id` varchar(20) DEFAULT '56' COMMENT '链 ID，与 poolbases 一致',
+  `pool_id` varchar(50) DEFAULT NULL COMMENT '池子 ID，与 poolbases.pool_id 对应'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='池子结算与清算数据表';
 
 --
 -- 转存表中的数据 `pooldata`
@@ -239,20 +249,21 @@ INSERT INTO `pooldata` (`settle_amount_lend`, `settle_amount_borrow`, `finish_am
 
 --
 -- 表的结构 `token_info`
+-- 业务：代币元数据。按链维护合约地址、符号、精度、价格、logo 等，供前端与池子配置使用；同一 symbol 不同链为不同记录
 --
 
 CREATE TABLE `token_info` (
   `id` int(10) UNSIGNED NOT NULL,
-  `symbol` varchar(100) DEFAULT NULL,
-  `logo` varchar(150) DEFAULT NULL,
-  `price` varchar(50) DEFAULT NULL,
-  `token` varchar(100) DEFAULT NULL,
-  `chain_id` varchar(20) DEFAULT '56',
-  `abi_file_exist` int(2) UNSIGNED DEFAULT '0',
+  `symbol` varchar(100) DEFAULT NULL COMMENT '代币符号，如 BUSD/BTC',
+  `logo` varchar(150) DEFAULT NULL COMMENT '代币 logo URL',
+  `price` varchar(50) DEFAULT NULL COMMENT '价格(精度值，用于估值与清算)',
+  `token` varchar(100) DEFAULT NULL COMMENT '代币合约地址',
+  `chain_id` varchar(20) DEFAULT '56' COMMENT '链 ID: 56=BSC 97=测试网',
+  `abi_file_exist` int(2) UNSIGNED DEFAULT '0' COMMENT '是否已有 ABI 文件: 0否 1是',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
-  `decimals` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+  `decimals` int(11) NOT NULL COMMENT '代币精度(小数位数)'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='代币信息表(按链)';
 
 --
 -- 转存表中的数据 `token_info`
