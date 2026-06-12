@@ -42,3 +42,24 @@ Learning goal:
 - Store the fixed-term pool configuration.
 - Understand the pool lifecycle enum before adding deposits.
 - Keep admin-only pool creation separate from user-facing lending and borrowing flows.
+
+## Step 3
+
+Contract changes:
+
+- `LearningPledgePool.depositLend`
+- `LearningPledgePool.userLendInfo`
+- `LearningPledgePool.minLendAmount`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step3
+```
+
+Learning goal:
+
+- Move lender funds into the pool with ERC20 `approve` + `transferFrom`.
+- Track lender stake amount separately from total pool lend supply.
+- Enforce the first user-facing gates: paused state, settlement time, min amount, and max pool capacity.

@@ -8,6 +8,7 @@ Create `PledgePoolV1` with `PoolState`, `PoolBaseInfo`, `PoolDataInfo`, `createP
 
 ### 3. Lender Deposit Flow
 Add `depositLend`. Track `userLendInfo`, `lendSupply`, max supply, min amount, ERC20 transfer.
+ToDo: How it works in real world project? Let's say lender deposits USDT.
 
 ### 4. Borrower Collateral Flow
 Add `depositBorrow`. Track `userBorrowInfo`, `borrowSupply`.

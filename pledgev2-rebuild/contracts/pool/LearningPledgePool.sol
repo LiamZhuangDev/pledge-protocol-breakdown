@@ -2,6 +2,10 @@
 
 pragma solidity ^0.8.24;
 
+interface IERC20Like {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
 contract LearningPledgePool {
     enum PoolState {
         MATCH,
@@ -40,12 +44,21 @@ contract LearningPledgePool {
         uint256 autoLiquidateThreshold;
     }
 
+    struct LendInfo {
+        uint256 stakeAmount;
+        uint256 refundAmount;
+        bool hasRefunded;
+        bool hasClaimed;
+    }
+
     address public owner;
     address public oracle;
     address payable public feeAddress;
     bool public globalPaused;
+    uint256 public minLendAmount = 100 ether;
 
     PoolBaseInfo[] private pools;
+    mapping(address => mapping(uint256 => LendInfo)) public userLendInfo;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event PoolCreated(
@@ -58,7 +71,9 @@ contract LearningPledgePool {
         uint256 endTime
     );
     event FeeAddressUpdated(address indexed previousFeeAddress, address indexed newFeeAddress);
+    event MinLendAmountUpdated(uint256 previousMinAmount, uint256 newMinAmount);
     event PauseUpdated(bool paused);
+    event DepositLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
 
     constructor(address oracle_, address payable feeAddress_) {
         require(oracle_ != address(0), "LearningPledgePool: zero oracle");
@@ -119,19 +134,40 @@ contract LearningPledgePool {
         return pools.length;
     }
 
-    function getPool(uint256 poolId) external view returns (PoolBaseInfo memory) {
-        require(poolId < pools.length, "LearningPledgePool: pool not found");
+    function getPool(uint256 poolId) external view poolExists(poolId) returns (PoolBaseInfo memory) {
         return pools[poolId];
     }
 
-    function getPoolState(uint256 poolId) external view returns (PoolState) {
-        require(poolId < pools.length, "LearningPledgePool: pool not found");
+    function getPoolState(uint256 poolId) external view poolExists(poolId) returns (PoolState) {
         return pools[poolId].state;
     }
 
-    function isBeforeSettle(uint256 poolId) external view returns (bool) {
-        require(poolId < pools.length, "LearningPledgePool: pool not found");
+    function isBeforeSettle(uint256 poolId) external view poolExists(poolId) returns (bool) {
         return block.timestamp < pools[poolId].settleTime;
+    }
+
+    function depositLend(uint256 poolId, uint256 amount)
+        external
+        whenNotPaused
+        poolExists(poolId)
+        stateMatch(poolId)
+        beforeSettle(poolId)
+    {
+        PoolBaseInfo storage pool = pools[poolId];
+        LendInfo storage lendInfo = userLendInfo[msg.sender][poolId];
+
+        require(amount >= minLendAmount, "LearningPledgePool: lend amount too small");
+        require(pool.lendSupply + amount <= pool.maxSupply, "LearningPledgePool: lend supply exceeded");
+
+        bool success = IERC20Like(pool.lendToken).transferFrom(msg.sender, address(this), amount);
+        require(success, "LearningPledgePool: lend transfer failed");
+
+        lendInfo.stakeAmount += amount;
+        lendInfo.hasRefunded = false;
+        lendInfo.hasClaimed = false;
+        pool.lendSupply += amount;
+
+        emit DepositLend(msg.sender, poolId, pool.lendToken, amount);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -148,9 +184,34 @@ contract LearningPledgePool {
         feeAddress = newFeeAddress;
     }
 
+    function setMinLendAmount(uint256 newMinAmount) external onlyOwner {
+        emit MinLendAmountUpdated(minLendAmount, newMinAmount);
+        minLendAmount = newMinAmount;
+    }
+
     function setPause(bool paused) external onlyOwner {
         globalPaused = paused;
         emit PauseUpdated(paused);
+    }
+
+    modifier whenNotPaused() {
+        require(!globalPaused, "LearningPledgePool: paused");
+        _;
+    }
+
+    modifier poolExists(uint256 poolId) {
+        require(poolId < pools.length, "LearningPledgePool: pool not found");
+        _;
+    }
+
+    modifier stateMatch(uint256 poolId) {
+        require(pools[poolId].state == PoolState.MATCH, "LearningPledgePool: pool not match");
+        _;
+    }
+
+    modifier beforeSettle(uint256 poolId) {
+        require(block.timestamp < pools[poolId].settleTime, "LearningPledgePool: settle time passed");
+        _;
     }
 
     modifier onlyOwner() {
