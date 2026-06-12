@@ -1,3 +1,42 @@
+# Pledge Rebuild Plan
+
+### 1. Minimal ERC20 Setup
+Build `MockERC20`, 'DebtToken' and simple mint/burn permissions.
+
+### 2. Pool Creation
+Create `PledgePoolV1` with `PoolState`, `PoolBaseInfo`, `PoolDataInfo`, `createPool`, `poolLength`, `getPoolState`.
+
+### 3. Lender Deposit Flow
+Add `depositLend`. Track `userLendInfo`, `lendSupply`, max supply, min amount, ERC20 transfer.
+
+### 4. Borrower Collateral Flow
+Add `depositBorrow`. Track `userBorrowInfo`, `borrowSupply`.
+
+### 5. Oracle + Settlement
+Add mock oracle and `settle` math.
+
+### 6. Refunds
+Add `refundLend` and `refundBorrow`. Users recover unmatched funds after settlement.
+
+### 7. Claim SP / JP Tokens
+Add `claimLend` and `claimBorrow`. 
+Lenders receive SP (senior/supply pool) tokens. 
+Borrowers receive JP (junior poll) tokens and match lendToken loan.
+
+### 8. Finish Flow
+Add interest calculation first without Uniswap.
+Then add router swap later.
+
+### 9. Liquidation Flow
+Add `checkoutLiquidate`. Then add `liquidate`.
+
+### 10. Admin / Multisig Last
+First use `Ownable`. After business logic is clear, replace admin with a safer multisig design keyed by:
+```
+caller + target + function selector + calldata hash + nonce
+```
+
+---
 # [Pledge系统文档](https://github.com/MetaNodeAcademy/ProjectBreakdown-Pledge) :point_left: 
 [Pledge前端代码](https://github.com/MetaNodeAcademy/ProjectBreakdown-Pledge/tree/main/pledge-fe) :point_left: 
 [Pledge后端代码](https://github.com/MetaNodeAcademy/ProjectBreakdown-Pledge/tree/main/pledge-backend) :point_left: 
