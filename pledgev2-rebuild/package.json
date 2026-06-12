@@ -1,0 +1,15 @@
+{
+  "name": "pledgev2-rebuild",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Learning rebuild of the pledgev2 contracts, built in small Hardhat checkpoints.",
+  "scripts": {
+    "test": "hardhat test",
+    "test:step1": "hardhat test test/01-step1-token-oracle.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.22.18"
+  }
+}
