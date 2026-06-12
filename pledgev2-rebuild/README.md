@@ -23,3 +23,22 @@ Learning goal:
 
 - Understand SP/JP-style receipt tokens as mintable/burnable ERC20 claim tokens.
 - Understand a simple owner-controlled mock oracle before using price math inside a lending pool.
+
+## Step 2
+
+Contracts:
+
+- `contracts/pool/LearningPledgePool.sol`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step2
+```
+
+Learning goal:
+
+- Store the fixed-term pool configuration.
+- Understand the pool lifecycle enum before adding deposits.
+- Keep admin-only pool creation separate from user-facing lending and borrowing flows.

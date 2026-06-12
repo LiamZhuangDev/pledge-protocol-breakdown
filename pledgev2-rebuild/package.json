@@ -5,7 +5,8 @@
   "description": "Learning rebuild of the pledgev2 contracts, built in small Hardhat checkpoints.",
   "scripts": {
     "test": "hardhat test",
-    "test:step1": "hardhat test test/01-step1-token-oracle.js"
+    "test:step1": "hardhat test test/01-step1-token-oracle.js",
+    "test:step2": "hardhat test test/02-step2-create-pool.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
