@@ -528,20 +528,26 @@ contract PledgePool is ReentrancyGuard, SafeTransfer, multiSignatureClient{
         // 池子的状态必须是匹配状态
         require(pool.state == PoolState.MATCH, "settle: 池子状态必须是匹配");
         if (pool.lendSupply > 0 && pool.borrowSupply > 0) {
-            // 获取标的物价格
-            uint256[2]memory prices = getUnderlyingPriceView(_pid);
-            // 总保证金价值 = 保证金数量 * 保证金价格
-            uint256 totalValue = pool.borrowSupply.mul(prices[1].mul(calDecimal).div(prices[0])).div(calDecimal);
-            // 转换为稳定币价值
-            uint256 actualValue = totalValue.mul(baseDecimal).div(pool.martgageRate);
-            if (pool.lendSupply > actualValue){
-                // 总借款大于总借出
-                data.settleAmountLend = actualValue;
+            // 获取 lendToken 和 borrowToken 的价格：[lendToken价格, borrowToken价格]
+            uint256[2] memory prices = getUnderlyingPriceView(_pid);
+            uint256 lendTokenPrice = prices[0];
+            uint256 borrowTokenPrice = prices[1];
+            // 1 个 borrowToken 折算成多少 lendToken，按 1e18 精度计算
+            uint256 borrowToLendPriceRatio = borrowTokenPrice.mul(calDecimal).div(lendTokenPrice);
+            // 同一个价格比例，按抵押率精度 1e8 计算，用于反推需要多少抵押品
+            uint256 borrowToLendPriceRatioBase = borrowTokenPrice.mul(baseDecimal).div(lendTokenPrice);
+            // 抵押品总价值，按 lendToken 计价
+            uint256 collateralValueInLendToken = pool.borrowSupply.mul(borrowToLendPriceRatio).div(calDecimal);
+            // 在抵押率约束下，抵押品最多能支持匹配多少 lendToken
+            uint256 maxSettleLendAmount = collateralValueInLendToken.mul(baseDecimal).div(pool.martgageRate);
+            if (pool.lendSupply > maxSettleLendAmount){
+                // 出借资金超过抵押品可支持额度：全部抵押品参与结算，多余 lendToken 后续退款
+                data.settleAmountLend = maxSettleLendAmount;
                 data.settleAmountBorrow = pool.borrowSupply;
             } else {
-                // 总借款小于总借出
+                // 抵押品超过出借资金所需额度：全部 lendToken 参与结算，多余抵押品后续退款
                 data.settleAmountLend = pool.lendSupply;
-                data.settleAmountBorrow = pool.lendSupply.mul(pool.martgageRate).div(prices[1].mul(baseDecimal).div(prices[0]));
+                data.settleAmountBorrow = pool.lendSupply.mul(pool.martgageRate).div(borrowToLendPriceRatioBase);
             }
             // 更新池子状态
             pool.state = PoolState.EXECUTION;
