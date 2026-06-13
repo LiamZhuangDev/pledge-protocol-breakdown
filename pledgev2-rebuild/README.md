@@ -84,3 +84,24 @@ Learning goal:
 - Move borrower collateral into the pool with ERC20 `approve` + `transferFrom`.
 - Track borrower collateral separately from lender stablecoin deposits.
 - Understand that borrowers do not receive the loan yet; matched loan payout happens after settlement.
+
+## Step 5
+
+Contract changes:
+
+- `LearningPledgePool.PoolDataInfo`
+- `LearningPledgePool.getPoolData`
+- `LearningPledgePool.settle`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step5
+```
+
+Learning goal:
+
+- Convert borrower collateral value into lender-token value using oracle prices.
+- Apply the mortgage/collateralization rate to find the maximum matched loan amount.
+- Move pools from `MATCH` to `EXECUTION`, or to `UNDONE` when one side is empty.

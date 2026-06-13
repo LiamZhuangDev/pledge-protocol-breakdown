@@ -6,7 +6,14 @@ interface IERC20Like {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
+interface IOracleLike {
+    function getPrice(address asset) external view returns (uint256);
+}
+
 contract LearningPledgePool {
+    uint256 private constant RATE_BASE = 1e8;
+    uint256 private constant PRICE_SCALE = 1e18;
+
     enum PoolState {
         MATCH,
         EXECUTION,
@@ -44,6 +51,15 @@ contract LearningPledgePool {
         uint256 autoLiquidateThreshold;
     }
 
+    struct PoolDataInfo {
+        uint256 settleAmountLend; // required lend amount
+        uint256 settleAmountBorrow; // required collateral amount
+        uint256 finishAmountLend;
+        uint256 finishAmountBorrow;
+        uint256 liquidationAmountLend;
+        uint256 liquidationAmountBorrow;
+    }
+
     struct LendInfo {
         uint256 stakeAmount;
         uint256 refundAmount;
@@ -66,6 +82,7 @@ contract LearningPledgePool {
     uint256 public minBorrowAmount = 1 ether;
 
     PoolBaseInfo[] private pools;
+    PoolDataInfo[] private poolData;
     mapping(address => mapping(uint256 => LendInfo)) public userLendInfo;
     mapping(address => mapping(uint256 => BorrowInfo)) public userBorrowInfo;
 
@@ -85,6 +102,7 @@ contract LearningPledgePool {
     event PauseUpdated(bool paused);
     event DepositLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
     event DepositBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
+    event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
 
     constructor(address oracle_, address payable feeAddress_) {
         require(oracle_ != address(0), "LearningPledgePool: zero oracle");
@@ -129,6 +147,16 @@ contract LearningPledgePool {
                 autoLiquidateThreshold: params.autoLiquidateThreshold
             })
         );
+        poolData.push(
+            PoolDataInfo({
+                settleAmountLend: 0,
+                settleAmountBorrow: 0,
+                finishAmountLend: 0,
+                finishAmountBorrow: 0,
+                liquidationAmountLend: 0,
+                liquidationAmountBorrow: 0
+            })
+        );
 
         emit PoolCreated(
             poolId,
@@ -147,6 +175,10 @@ contract LearningPledgePool {
 
     function getPool(uint256 poolId) external view poolExists(poolId) returns (PoolBaseInfo memory) {
         return pools[poolId];
+    }
+
+    function getPoolData(uint256 poolId) external view poolExists(poolId) returns (PoolDataInfo memory) {
+        return poolData[poolId];
     }
 
     function getPoolState(uint256 poolId) external view poolExists(poolId) returns (PoolState) {
@@ -204,6 +236,37 @@ contract LearningPledgePool {
         emit DepositBorrow(msg.sender, poolId, pool.borrowToken, amount);
     }
 
+    function settle(uint256 poolId) external onlyOwner poolExists(poolId) stateMatch(poolId) afterSettle(poolId) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+
+        if (pool.lendSupply == 0 || pool.borrowSupply == 0) {
+            data.settleAmountLend = pool.lendSupply;
+            data.settleAmountBorrow = pool.borrowSupply;
+            _setPoolState(poolId, PoolState.UNDONE);
+            return;
+        }
+
+        uint256 lendPrice = IOracleLike(oracle).getPrice(pool.lendToken);
+        uint256 borrowPrice = IOracleLike(oracle).getPrice(pool.borrowToken);
+        require(lendPrice > 0, "LearningPledgePool: missing lend price");
+        require(borrowPrice > 0, "LearningPledgePool: missing borrow price");
+
+        uint256 borrowToLendRatio = (borrowPrice * PRICE_SCALE) / lendPrice;
+        uint256 collateralValueInLend = (pool.borrowSupply * borrowToLendRatio) / PRICE_SCALE;
+        uint256 maxSettleLend = (collateralValueInLend * RATE_BASE) / pool.mortgageRate;
+
+        if (pool.lendSupply > maxSettleLend) {
+            data.settleAmountLend = maxSettleLend;
+            data.settleAmountBorrow = pool.borrowSupply;
+        } else {
+            data.settleAmountLend = pool.lendSupply;
+            data.settleAmountBorrow = (pool.lendSupply * pool.mortgageRate * lendPrice) / (borrowPrice * RATE_BASE);
+        }
+
+        _setPoolState(poolId, PoolState.EXECUTION);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "LearningPledgePool: zero owner");
 
@@ -253,8 +316,19 @@ contract LearningPledgePool {
         _;
     }
 
+    modifier afterSettle(uint256 poolId) {
+        require(block.timestamp >= pools[poolId].settleTime, "LearningPledgePool: before settle time");
+        _;
+    }
+
     modifier onlyOwner() {
         require(msg.sender == owner, "LearningPledgePool: caller is not owner");
         _;
+    }
+
+    function _setPoolState(uint256 poolId, PoolState newState) internal {
+        PoolState previousState = pools[poolId].state;
+        pools[poolId].state = newState;
+        emit StateChanged(poolId, previousState, newState);
     }
 }
