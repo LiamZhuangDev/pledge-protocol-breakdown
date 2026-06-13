@@ -125,3 +125,23 @@ Learning goal:
 - Return unmatched lender stablecoin when borrower collateral cannot support the full lend supply.
 - Return unmatched borrower collateral when lender demand does not need all collateral.
 - Keep refund accounting separate from the later SP/JP claim flow.
+
+## Step 7
+
+Contract changes:
+
+- `LearningPledgePool.claimLend`
+- `LearningPledgePool.claimBorrow`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step7
+```
+
+Learning goal:
+
+- Mint SP tokens to lenders for their matched stablecoin contribution.
+- Mint JP tokens to borrowers for their matched collateral contribution.
+- Send borrowers their matched stablecoin loan only after settlement.

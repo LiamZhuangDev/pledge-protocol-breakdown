@@ -2,9 +2,17 @@
 
 pragma solidity ^0.8.24;
 
+// Asset tokens for lending and borrowing, for example:
+// lendToken: USDT / USDC / BUSD
+// borrowToken: WBTC / WETH / DAI
 interface IERC20Like {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+// Protocol receipt tokens for lenders and borrowers
+interface IDebtTokenLike {
+    function mint(address to, uint256 amount) external returns (bool);
 }
 
 interface IOracleLike {
@@ -105,6 +113,14 @@ contract LearningPledgePool {
     event DepositBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
     event RefundLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
     event RefundBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
+    event ClaimLend(address indexed lender, uint256 indexed poolId, address indexed spToken, uint256 spAmount);
+    event ClaimBorrow(
+        address indexed borrower,
+        uint256 indexed poolId,
+        address indexed jpToken,
+        uint256 jpAmount,
+        uint256 loanAmount
+    );
     event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
 
     constructor(address oracle_, address payable feeAddress_) {
@@ -314,6 +330,49 @@ contract LearningPledgePool {
         require(success, "LearningPledgePool: borrow refund transfer failed");
 
         emit RefundBorrow(msg.sender, poolId, pool.borrowToken, refundAmount);
+    }
+
+    function claimLend(uint256 poolId) external whenNotPaused poolExists(poolId) stateExecution(poolId) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        LendInfo storage lendInfo = userLendInfo[msg.sender][poolId];
+
+        require(lendInfo.stakeAmount > 0, "LearningPledgePool: no lend stake");
+        require(!lendInfo.hasClaimed, "LearningPledgePool: lend already claimed");
+
+        uint256 spAmount = (data.settleAmountLend * lendInfo.stakeAmount) / pool.lendSupply;
+        require(spAmount > 0, "LearningPledgePool: no sp claim");
+
+        lendInfo.hasClaimed = true;
+
+        bool success = IDebtTokenLike(pool.spToken).mint(msg.sender, spAmount);
+        require(success, "LearningPledgePool: sp mint failed");
+
+        emit ClaimLend(msg.sender, poolId, pool.spToken, spAmount);
+    }
+
+    function claimBorrow(uint256 poolId) external whenNotPaused poolExists(poolId) stateExecution(poolId) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        BorrowInfo storage borrowInfo = userBorrowInfo[msg.sender][poolId];
+
+        require(borrowInfo.stakeAmount > 0, "LearningPledgePool: no borrow stake");
+        require(!borrowInfo.hasClaimed, "LearningPledgePool: borrow already claimed");
+
+        uint256 jpAmount = (data.settleAmountBorrow * borrowInfo.stakeAmount) / pool.borrowSupply;
+        uint256 loanAmount = (data.settleAmountLend * borrowInfo.stakeAmount) / pool.borrowSupply;
+        require(jpAmount > 0, "LearningPledgePool: no jp claim");
+        require(loanAmount > 0, "LearningPledgePool: no loan claim");
+
+        borrowInfo.hasClaimed = true;
+
+        bool minted = IDebtTokenLike(pool.jpToken).mint(msg.sender, jpAmount);
+        require(minted, "LearningPledgePool: jp mint failed");
+
+        bool transferred = IERC20Like(pool.lendToken).transfer(msg.sender, loanAmount);
+        require(transferred, "LearningPledgePool: loan transfer failed");
+
+        emit ClaimBorrow(msg.sender, poolId, pool.jpToken, jpAmount, loanAmount);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {

@@ -10,7 +10,8 @@
     "test:step3": "hardhat test test/03-step3-deposit-lend.js",
     "test:step4": "hardhat test test/04-step4-deposit-borrow.js",
     "test:step5": "hardhat test test/05-step5-settle.js",
-    "test:step6": "hardhat test test/06-step6-refunds.js"
+    "test:step6": "hardhat test test/06-step6-refunds.js",
+    "test:step7": "hardhat test test/07-step7-claims.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
