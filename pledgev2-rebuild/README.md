@@ -105,3 +105,23 @@ Learning goal:
 - Convert borrower collateral value into lender-token value using oracle prices.
 - Apply the mortgage/collateralization rate to find the maximum matched loan amount.
 - Move pools from `MATCH` to `EXECUTION`, or to `UNDONE` when one side is empty.
+
+## Step 6
+
+Contract changes:
+
+- `LearningPledgePool.refundLend`
+- `LearningPledgePool.refundBorrow`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step6
+```
+
+Learning goal:
+
+- Return unmatched lender stablecoin when borrower collateral cannot support the full lend supply.
+- Return unmatched borrower collateral when lender demand does not need all collateral.
+- Keep refund accounting separate from the later SP/JP claim flow.

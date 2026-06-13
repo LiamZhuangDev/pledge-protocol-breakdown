@@ -3,6 +3,7 @@
 pragma solidity ^0.8.24;
 
 interface IERC20Like {
+    function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
@@ -102,6 +103,8 @@ contract LearningPledgePool {
     event PauseUpdated(bool paused);
     event DepositLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
     event DepositBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
+    event RefundLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
+    event RefundBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
     event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
 
     constructor(address oracle_, address payable feeAddress_) {
@@ -267,6 +270,52 @@ contract LearningPledgePool {
         _setPoolState(poolId, PoolState.EXECUTION);
     }
 
+    function refundLend(uint256 poolId) external whenNotPaused poolExists(poolId) stateExecution(poolId) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        LendInfo storage lendInfo = userLendInfo[msg.sender][poolId];
+
+        require(lendInfo.stakeAmount > 0, "LearningPledgePool: no lend stake");
+        require(!lendInfo.hasRefunded, "LearningPledgePool: lend already refunded");
+
+        uint256 unmatchedAmount = pool.lendSupply - data.settleAmountLend;
+        require(unmatchedAmount > 0, "LearningPledgePool: no lend refund");
+
+        // unmatchedAmount       = TOTAL lender money that was NOT used in settlement
+        // lendInfo.stakeAmount  = THIS lender's original deposit
+        // pool.lendSupply       = TOTAL deposited by ALL lenders
+        // refundAmount          = unmatchedAmount * (THIS lender's share of the pool)
+        uint256 refundAmount = (unmatchedAmount * lendInfo.stakeAmount) / pool.lendSupply;
+        lendInfo.refundAmount += refundAmount;
+        lendInfo.hasRefunded = true;
+
+        bool success = IERC20Like(pool.lendToken).transfer(msg.sender, refundAmount);
+        require(success, "LearningPledgePool: lend refund transfer failed");
+
+        emit RefundLend(msg.sender, poolId, pool.lendToken, refundAmount);
+    }
+
+    function refundBorrow(uint256 poolId) external whenNotPaused poolExists(poolId) stateExecution(poolId) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        BorrowInfo storage borrowInfo = userBorrowInfo[msg.sender][poolId];
+
+        require(borrowInfo.stakeAmount > 0, "LearningPledgePool: no borrow stake");
+        require(!borrowInfo.hasRefunded, "LearningPledgePool: borrow already refunded");
+
+        uint256 unmatchedAmount = pool.borrowSupply - data.settleAmountBorrow;
+        require(unmatchedAmount > 0, "LearningPledgePool: no borrow refund");
+
+        uint256 refundAmount = (unmatchedAmount * borrowInfo.stakeAmount) / pool.borrowSupply;
+        borrowInfo.refundAmount += refundAmount;
+        borrowInfo.hasRefunded = true;
+
+        bool success = IERC20Like(pool.borrowToken).transfer(msg.sender, refundAmount);
+        require(success, "LearningPledgePool: borrow refund transfer failed");
+
+        emit RefundBorrow(msg.sender, poolId, pool.borrowToken, refundAmount);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "LearningPledgePool: zero owner");
 
@@ -308,6 +357,11 @@ contract LearningPledgePool {
 
     modifier stateMatch(uint256 poolId) {
         require(pools[poolId].state == PoolState.MATCH, "LearningPledgePool: pool not match");
+        _;
+    }
+
+    modifier stateExecution(uint256 poolId) {
+        require(pools[poolId].state == PoolState.EXECUTION, "LearningPledgePool: pool not execution");
         _;
     }
 
