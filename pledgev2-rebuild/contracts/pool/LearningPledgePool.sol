@@ -51,14 +51,23 @@ contract LearningPledgePool {
         bool hasClaimed;
     }
 
+    struct BorrowInfo {
+        uint256 stakeAmount;
+        uint256 refundAmount;
+        bool hasRefunded;
+        bool hasClaimed;
+    }
+
     address public owner;
     address public oracle;
     address payable public feeAddress;
     bool public globalPaused;
     uint256 public minLendAmount = 100 ether;
+    uint256 public minBorrowAmount = 1 ether;
 
     PoolBaseInfo[] private pools;
     mapping(address => mapping(uint256 => LendInfo)) public userLendInfo;
+    mapping(address => mapping(uint256 => BorrowInfo)) public userBorrowInfo;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event PoolCreated(
@@ -72,8 +81,10 @@ contract LearningPledgePool {
     );
     event FeeAddressUpdated(address indexed previousFeeAddress, address indexed newFeeAddress);
     event MinLendAmountUpdated(uint256 previousMinAmount, uint256 newMinAmount);
+    event MinBorrowAmountUpdated(uint256 previousMinAmount, uint256 newMinAmount);
     event PauseUpdated(bool paused);
     event DepositLend(address indexed lender, uint256 indexed poolId, address indexed token, uint256 amount);
+    event DepositBorrow(address indexed borrower, uint256 indexed poolId, address indexed token, uint256 amount);
 
     constructor(address oracle_, address payable feeAddress_) {
         require(oracle_ != address(0), "LearningPledgePool: zero oracle");
@@ -170,6 +181,29 @@ contract LearningPledgePool {
         emit DepositLend(msg.sender, poolId, pool.lendToken, amount);
     }
 
+    function depositBorrow(uint256 poolId, uint256 amount)
+        external
+        whenNotPaused
+        poolExists(poolId)
+        stateMatch(poolId)
+        beforeSettle(poolId)
+    {
+        PoolBaseInfo storage pool = pools[poolId];
+        BorrowInfo storage borrowInfo = userBorrowInfo[msg.sender][poolId];
+
+        require(amount >= minBorrowAmount, "LearningPledgePool: borrow amount too small");
+
+        bool success = IERC20Like(pool.borrowToken).transferFrom(msg.sender, address(this), amount);
+        require(success, "LearningPledgePool: borrow transfer failed");
+
+        borrowInfo.stakeAmount += amount;
+        borrowInfo.hasRefunded = false;
+        borrowInfo.hasClaimed = false;
+        pool.borrowSupply += amount;
+
+        emit DepositBorrow(msg.sender, poolId, pool.borrowToken, amount);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "LearningPledgePool: zero owner");
 
@@ -187,6 +221,11 @@ contract LearningPledgePool {
     function setMinLendAmount(uint256 newMinAmount) external onlyOwner {
         emit MinLendAmountUpdated(minLendAmount, newMinAmount);
         minLendAmount = newMinAmount;
+    }
+
+    function setMinBorrowAmount(uint256 newMinAmount) external onlyOwner {
+        emit MinBorrowAmountUpdated(minBorrowAmount, newMinAmount);
+        minBorrowAmount = newMinAmount;
     }
 
     function setPause(bool paused) external onlyOwner {

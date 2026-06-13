@@ -63,3 +63,24 @@ Learning goal:
 - Move lender funds into the pool with ERC20 `approve` + `transferFrom`.
 - Track lender stake amount separately from total pool lend supply.
 - Enforce the first user-facing gates: paused state, settlement time, min amount, and max pool capacity.
+
+## Step 4
+
+Contract changes:
+
+- `LearningPledgePool.depositBorrow`
+- `LearningPledgePool.userBorrowInfo`
+- `LearningPledgePool.minBorrowAmount`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step4
+```
+
+Learning goal:
+
+- Move borrower collateral into the pool with ERC20 `approve` + `transferFrom`.
+- Track borrower collateral separately from lender stablecoin deposits.
+- Understand that borrowers do not receive the loan yet; matched loan payout happens after settlement.
