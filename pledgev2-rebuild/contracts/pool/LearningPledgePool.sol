@@ -12,6 +12,7 @@ interface IERC20Like {
 
 // Protocol receipt tokens for lenders and borrowers
 interface IDebtTokenLike {
+    function burn(address from, uint256 amount) external returns (bool);
     function mint(address to, uint256 amount) external returns (bool);
 }
 
@@ -22,6 +23,7 @@ interface IOracleLike {
 contract LearningPledgePool {
     uint256 private constant RATE_BASE = 1e8;
     uint256 private constant PRICE_SCALE = 1e18;
+    uint256 private constant SECONDS_PER_YEAR = 365 days;
 
     enum PoolState {
         MATCH,
@@ -121,6 +123,9 @@ contract LearningPledgePool {
         uint256 jpAmount,
         uint256 loanAmount
     );
+    event Finish(uint256 indexed poolId, uint256 repaymentAmount, uint256 remainingCollateralAmount);
+    event WithdrawLend(address indexed lender, uint256 indexed poolId, uint256 spAmount, uint256 lendAmount);
+    event WithdrawBorrow(address indexed borrower, uint256 indexed poolId, uint256 jpAmount, uint256 collateralAmount);
     event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
 
     constructor(address oracle_, address payable feeAddress_) {
@@ -206,6 +211,16 @@ contract LearningPledgePool {
 
     function isBeforeSettle(uint256 poolId) external view poolExists(poolId) returns (bool) {
         return block.timestamp < pools[poolId].settleTime;
+    }
+
+    function getRequiredRepayment(uint256 poolId) public view poolExists(poolId) returns (uint256) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+
+        uint256 term = pool.endTime - pool.settleTime;
+        uint256 interest = (data.settleAmountLend * pool.interestRate * term) / (RATE_BASE * SECONDS_PER_YEAR);
+
+        return data.settleAmountLend + interest;
     }
 
     function depositLend(uint256 poolId, uint256 amount)
@@ -375,6 +390,75 @@ contract LearningPledgePool {
         emit ClaimBorrow(msg.sender, poolId, pool.jpToken, jpAmount, loanAmount);
     }
 
+    function finish(uint256 poolId, uint256 repaymentAmount)
+        external
+        onlyOwner
+        whenNotPaused
+        poolExists(poolId)
+        stateExecution(poolId)
+        afterEnd(poolId)
+    {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        uint256 requiredRepayment = getRequiredRepayment(poolId);
+
+        require(repaymentAmount >= requiredRepayment, "LearningPledgePool: insufficient repayment");
+
+        bool success = IERC20Like(pool.lendToken).transferFrom(msg.sender, address(this), repaymentAmount);
+        require(success, "LearningPledgePool: repayment transfer failed");
+
+        data.finishAmountLend = repaymentAmount;
+        data.finishAmountBorrow = data.settleAmountBorrow;
+
+        _setPoolState(poolId, PoolState.FINISH);
+
+        emit Finish(poolId, repaymentAmount, data.finishAmountBorrow);
+    }
+
+    function withdrawLend(uint256 poolId, uint256 spAmount)
+        external
+        whenNotPaused
+        poolExists(poolId)
+        stateFinish(poolId)
+    {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+
+        require(spAmount > 0, "LearningPledgePool: zero sp amount");
+
+        uint256 lendAmount = (data.finishAmountLend * spAmount) / data.settleAmountLend;
+
+        bool burned = IDebtTokenLike(pool.spToken).burn(msg.sender, spAmount);
+        require(burned, "LearningPledgePool: sp burn failed");
+
+        bool transferred = IERC20Like(pool.lendToken).transfer(msg.sender, lendAmount);
+        require(transferred, "LearningPledgePool: lend withdraw transfer failed");
+
+        emit WithdrawLend(msg.sender, poolId, spAmount, lendAmount);
+    }
+
+    function withdrawBorrow(uint256 poolId, uint256 jpAmount)
+        external
+        whenNotPaused
+        poolExists(poolId)
+        stateFinish(poolId)
+    {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+
+        require(jpAmount > 0, "LearningPledgePool: zero jp amount");
+
+        uint256 collateralAmount = (data.finishAmountBorrow * jpAmount) / data.settleAmountBorrow;
+
+        bool burned = IDebtTokenLike(pool.jpToken).burn(msg.sender, jpAmount);
+        require(burned, "LearningPledgePool: jp burn failed");
+
+        bool transferred = IERC20Like(pool.borrowToken).transfer(msg.sender, collateralAmount);
+        require(transferred, "LearningPledgePool: borrow withdraw transfer failed");
+
+        emit WithdrawBorrow(msg.sender, poolId, jpAmount, collateralAmount);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "LearningPledgePool: zero owner");
 
@@ -424,6 +508,11 @@ contract LearningPledgePool {
         _;
     }
 
+    modifier stateFinish(uint256 poolId) {
+        require(pools[poolId].state == PoolState.FINISH, "LearningPledgePool: pool not finish");
+        _;
+    }
+
     modifier beforeSettle(uint256 poolId) {
         require(block.timestamp < pools[poolId].settleTime, "LearningPledgePool: settle time passed");
         _;
@@ -431,6 +520,11 @@ contract LearningPledgePool {
 
     modifier afterSettle(uint256 poolId) {
         require(block.timestamp >= pools[poolId].settleTime, "LearningPledgePool: before settle time");
+        _;
+    }
+
+    modifier afterEnd(uint256 poolId) {
+        require(block.timestamp >= pools[poolId].endTime, "LearningPledgePool: before end time");
         _;
     }
 
