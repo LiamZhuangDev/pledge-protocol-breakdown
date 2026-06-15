@@ -40,7 +40,7 @@ contract LearningPledgePool {
     enum PoolState {
         MATCH,
         EXECUTION,
-        FINISH,
+        REPAID,
         LIQUIDATION,
         UNDONE
     }
@@ -137,8 +137,7 @@ contract LearningPledgePool {
         uint256 jpAmount,
         uint256 loanAmount
     );
-    event Finish(uint256 indexed poolId, uint256 repaymentAmount, uint256 remainingCollateralAmount);
-    event DexFinish(
+    event PoolRepaid(
         uint256 indexed poolId,
         address indexed router,
         uint256 collateralSold,
@@ -411,32 +410,7 @@ contract LearningPledgePool {
         emit ClaimBorrow(msg.sender, poolId, pool.jpToken, jpAmount, loanAmount);
     }
 
-    function finish(uint256 poolId, uint256 repaymentAmount)
-        external
-        onlyOwner
-        whenNotPaused
-        poolExists(poolId)
-        stateExecution(poolId)
-        afterEnd(poolId)
-    {
-        PoolBaseInfo storage pool = pools[poolId];
-        PoolDataInfo storage data = poolData[poolId];
-        uint256 requiredRepayment = getRequiredRepayment(poolId);
-
-        require(repaymentAmount >= requiredRepayment, "LearningPledgePool: insufficient repayment");
-
-        bool success = IERC20Like(pool.lendToken).transferFrom(msg.sender, address(this), repaymentAmount);
-        require(success, "LearningPledgePool: repayment transfer failed");
-
-        data.finishAmountLend = repaymentAmount;
-        data.finishAmountBorrow = data.settleAmountBorrow;
-
-        _setPoolState(poolId, PoolState.FINISH);
-
-        emit Finish(poolId, repaymentAmount, data.finishAmountBorrow);
-    }
-
-    function finishWithDex(uint256 poolId, uint256 maxCollateralAmount)
+    function repayPool(uint256 poolId, uint256 maxCollateralAmount)
         external
         onlyOwner
         whenNotPaused
@@ -458,6 +432,8 @@ contract LearningPledgePool {
         require(collateralToSell <= maxCollateralAmount, "LearningPledgePool: dex slippage too high");
         require(collateralToSell <= data.settleAmountBorrow, "LearningPledgePool: insufficient collateral");
 
+        // Pool allows DEX to pull collateral tokens from the pool, and sell them for the required repayment amount of lend tokens.
+        // So the caller needs to approve the DEX router to spend the collateral tokens first, then the router will pull the collateral and swap them for lend tokens.
         bool approved = IERC20Like(pool.borrowToken).approve(dexRouter, collateralToSell);
         require(approved, "LearningPledgePool: collateral approve failed");
 
@@ -472,10 +448,9 @@ contract LearningPledgePool {
         data.finishAmountLend = requiredRepayment;
         data.finishAmountBorrow = data.settleAmountBorrow - soldAmount;
 
-        _setPoolState(poolId, PoolState.FINISH);
+        _setPoolState(poolId, PoolState.REPAID);
 
-        emit DexFinish(poolId, dexRouter, soldAmount, requiredRepayment, data.finishAmountBorrow);
-        emit Finish(poolId, requiredRepayment, data.finishAmountBorrow);
+        emit PoolRepaid(poolId, dexRouter, soldAmount, requiredRepayment, data.finishAmountBorrow);
     }
 
     function withdrawLend(uint256 poolId, uint256 spAmount)
@@ -579,7 +554,7 @@ contract LearningPledgePool {
     }
 
     modifier stateFinish(uint256 poolId) {
-        require(pools[poolId].state == PoolState.FINISH, "LearningPledgePool: pool not finish");
+        require(pools[poolId].state == PoolState.REPAID, "LearningPledgePool: pool not finish");
         _;
     }
 

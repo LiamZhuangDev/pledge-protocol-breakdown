@@ -150,28 +150,6 @@ Learning goal:
 
 Contract changes:
 
-- `LearningPledgePool.getRequiredRepayment`
-- `LearningPledgePool.finish`
-- `LearningPledgePool.withdrawLend`
-- `LearningPledgePool.withdrawBorrow`
-
-Run:
-
-```bash
-cd pledgev2-rebuild
-npm run test:step8
-```
-
-Learning goal:
-
-- Calculate fixed-term interest from the matched lender amount.
-- Simulate final repayment without adding a DEX yet.
-- Burn SP tokens for lender repayment and JP tokens for borrower collateral withdrawal.
-
-## Step 9
-
-Contract changes:
-
 - `contracts/dex/LearningDexRouter.sol`
 - `LearningPledgePool.setDexRouter`
 - `LearningPledgePool.finishWithDex`

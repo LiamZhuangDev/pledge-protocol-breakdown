@@ -15,7 +15,7 @@ async function expectRevert(action, message) {
   assert.fail(`Expected transaction to revert with "${message}"`);
 }
 
-describe("Step 9: DEX finish flow", function () {
+describe("Step 8: Repay flow", function () {
   const INTEREST_RATE = 1_000_000;
   const MAX_SUPPLY = ethers.parseEther("100000");
   const MORTGAGE_RATE = 200_000_000;
@@ -129,7 +129,7 @@ describe("Step 9: DEX finish flow", function () {
       requiredRepayment
     );
 
-    await pool.finishWithDex(0, collateralToSell);
+    await pool.repayPool(0, collateralToSell);
 
     const data = await pool.getPoolData(0);
 
@@ -156,7 +156,7 @@ describe("Step 9: DEX finish flow", function () {
       requiredRepayment
     );
 
-    await pool.finishWithDex(0, collateralToSell);
+    await pool.repayPool(0, collateralToSell);
     await pool.connect(alice).withdrawLend(0, await spToken.balanceOf(alice.address));
     await pool.connect(bob).withdrawBorrow(0, await jpToken.balanceOf(bob.address));
 
@@ -167,7 +167,7 @@ describe("Step 9: DEX finish flow", function () {
   it("rejects DEX finish without router, before end, or when slippage exceeds max collateral", async function () {
     await createPoolAndMoveToExecution();
 
-    await expectRevert(pool.finishWithDex(0, ethers.parseEther("1")), "LearningPledgePool: before end time");
+    await expectRevert(pool.repayPool(0, ethers.parseEther("1")), "LearningPledgePool: before end time");
 
     await moveToEnd();
 
@@ -179,7 +179,7 @@ describe("Step 9: DEX finish flow", function () {
     );
 
     await expectRevert(
-      pool.finishWithDex(0, collateralToSell - 1n),
+      pool.repayPool(0, collateralToSell - 1n),
       "LearningPledgePool: dex slippage too high"
     );
 
@@ -200,7 +200,7 @@ describe("Step 9: DEX finish flow", function () {
     await moveToEnd();
 
     await expectRevert(
-      poolWithoutRouter.finishWithDex(0, ethers.parseEther("1")),
+      poolWithoutRouter.repayPool(0, ethers.parseEther("1")),
       "LearningPledgePool: dex router not set"
     );
   });
@@ -212,7 +212,7 @@ describe("Step 9: DEX finish flow", function () {
     await moveToEnd();
 
     await expectRevert(
-      pool.finishWithDex(0, ethers.parseEther("100")),
+      pool.repayPool(0, ethers.parseEther("100")),
       "LearningPledgePool: insufficient collateral"
     );
   });
