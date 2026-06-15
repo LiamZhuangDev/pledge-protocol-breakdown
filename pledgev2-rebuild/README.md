@@ -188,3 +188,30 @@ Learning goal:
 - Detect unhealthy collateral using current oracle prices.
 - Sell collateral through the DEX before normal repayment.
 - Distribute liquidation proceeds to SP holders and any remaining collateral to JP holders.
+
+## Step 10
+
+Contract changes:
+
+- `contracts/admin/LearningMultiSig.sol`
+- transfer pool ownership to the multisig admin
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step10
+```
+
+Learning goal:
+
+- Replace single-admin execution with threshold approvals.
+- Bind approvals to target, value, calldata hash, chain, multisig address, and nonce.
+- Execute pool admin calls only after enough owners approve the exact action.
+
+In interview, say:
+```
+I replaced single-owner admin control with an M-of-N multisig admin. 
+The pool still uses onlyOwner, but ownership is transferred to the multisig contract. 
+Admin actions are encoded as calldata, approved by multiple owners, and then executed by the multisig.
+```
