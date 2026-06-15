@@ -23,6 +23,14 @@ interface IOracleLike {
 
 interface IDexRouterLike {
     function getAmountIn(address tokenIn, address tokenOut, uint256 amountOut) external view returns (uint256);
+    function getAmountOut(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
+    function swapExactTokensForTokens(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address recipient
+    ) external returns (uint256 amountOut);
     function swapTokensForExactTokens(
         address tokenIn,
         address tokenOut,
@@ -144,6 +152,13 @@ contract LearningPledgePool {
         uint256 repaymentAmount,
         uint256 remainingCollateralAmount
     );
+    event PoolLiquidated(
+        uint256 indexed poolId,
+        address indexed router,
+        uint256 collateralSold,
+        uint256 lendTokenRecovered,
+        uint256 remainingCollateralAmount
+    );
     event WithdrawLend(address indexed lender, uint256 indexed poolId, uint256 spAmount, uint256 lendAmount);
     event WithdrawBorrow(address indexed borrower, uint256 indexed poolId, uint256 jpAmount, uint256 collateralAmount);
     event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
@@ -241,6 +256,26 @@ contract LearningPledgePool {
         uint256 interest = (data.settleAmountLend * pool.interestRate * term) / (RATE_BASE * SECONDS_PER_YEAR);
 
         return data.settleAmountLend + interest;
+    }
+
+    function isLiquidatable(uint256 poolId) public view poolExists(poolId) returns (bool) {
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+
+        if (pool.state != PoolState.EXECUTION || data.settleAmountLend == 0 || data.settleAmountBorrow == 0) {
+            return false;
+        }
+
+        uint256 lendPrice = IOracleLike(oracle).getPrice(pool.lendToken);
+        uint256 borrowPrice = IOracleLike(oracle).getPrice(pool.borrowToken);
+        require(lendPrice > 0, "LearningPledgePool: missing lend price");
+        require(borrowPrice > 0, "LearningPledgePool: missing borrow price");
+
+        uint256 borrowToLendRatio = (borrowPrice * PRICE_SCALE) / lendPrice;
+        uint256 collateralValueInLend = (data.settleAmountBorrow * borrowToLendRatio) / PRICE_SCALE;
+        uint256 liquidationThreshold = (data.settleAmountLend * (RATE_BASE + pool.autoLiquidateThreshold)) / RATE_BASE;
+
+        return collateralValueInLend < liquidationThreshold;
     }
 
     function depositLend(uint256 poolId, uint256 amount)
@@ -453,18 +488,80 @@ contract LearningPledgePool {
         emit PoolRepaid(poolId, dexRouter, soldAmount, requiredRepayment, data.finishAmountBorrow);
     }
 
+    function liquidate(uint256 poolId, uint256 maxCollateralAmount)
+        external
+        onlyOwner
+        whenNotPaused
+        poolExists(poolId)
+        stateExecution(poolId)
+    {
+        require(dexRouter != address(0), "LearningPledgePool: dex router not set");
+        require(isLiquidatable(poolId), "LearningPledgePool: pool not liquidatable");
+
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        uint256 requiredRepayment = getRequiredRepayment(poolId);
+        uint256 collateralToSell = IDexRouterLike(dexRouter).getAmountIn(
+            pool.borrowToken,
+            pool.lendToken,
+            requiredRepayment
+        );
+
+        uint256 soldAmount;
+        uint256 recoveredAmount;
+
+        if (collateralToSell <= data.settleAmountBorrow) {
+            require(collateralToSell <= maxCollateralAmount, "LearningPledgePool: dex slippage too high");
+
+            bool approved = IERC20Like(pool.borrowToken).approve(dexRouter, collateralToSell);
+            require(approved, "LearningPledgePool: collateral approve failed");
+
+            soldAmount = IDexRouterLike(dexRouter).swapTokensForExactTokens(
+                pool.borrowToken,
+                pool.lendToken,
+                requiredRepayment,
+                maxCollateralAmount,
+                address(this)
+            );
+            recoveredAmount = requiredRepayment;
+        } else {
+            soldAmount = data.settleAmountBorrow;
+            require(soldAmount <= maxCollateralAmount, "LearningPledgePool: dex slippage too high");
+
+            bool approved = IERC20Like(pool.borrowToken).approve(dexRouter, soldAmount);
+            require(approved, "LearningPledgePool: collateral approve failed");
+
+            recoveredAmount = IDexRouterLike(dexRouter).swapExactTokensForTokens(
+                pool.borrowToken,
+                pool.lendToken,
+                soldAmount,
+                0,
+                address(this)
+            );
+        }
+
+        data.liquidationAmountLend = recoveredAmount;
+        data.liquidationAmountBorrow = data.settleAmountBorrow - soldAmount;
+
+        _setPoolState(poolId, PoolState.LIQUIDATION);
+
+        emit PoolLiquidated(poolId, dexRouter, soldAmount, recoveredAmount, data.liquidationAmountBorrow);
+    }
+
     function withdrawLend(uint256 poolId, uint256 spAmount)
         external
         whenNotPaused
         poolExists(poolId)
-        stateFinish(poolId)
+        stateClosed(poolId)
     {
         PoolBaseInfo storage pool = pools[poolId];
         PoolDataInfo storage data = poolData[poolId];
 
         require(spAmount > 0, "LearningPledgePool: zero sp amount");
 
-        uint256 lendAmount = (data.finishAmountLend * spAmount) / data.settleAmountLend;
+        uint256 totalLendAmount =
+            pool.state == PoolState.REPAID ? data.finishAmountLend : data.liquidationAmountLend;
+        uint256 lendAmount = (totalLendAmount * spAmount) / data.settleAmountLend;
 
         bool burned = IDebtTokenLike(pool.spToken).burn(msg.sender, spAmount);
         require(burned, "LearningPledgePool: sp burn failed");
@@ -479,14 +576,16 @@ contract LearningPledgePool {
         external
         whenNotPaused
         poolExists(poolId)
-        stateFinish(poolId)
+        stateClosed(poolId)
     {
         PoolBaseInfo storage pool = pools[poolId];
         PoolDataInfo storage data = poolData[poolId];
 
         require(jpAmount > 0, "LearningPledgePool: zero jp amount");
 
-        uint256 collateralAmount = (data.finishAmountBorrow * jpAmount) / data.settleAmountBorrow;
+        uint256 totalCollateralAmount =
+            pool.state == PoolState.REPAID ? data.finishAmountBorrow : data.liquidationAmountBorrow;
+        uint256 collateralAmount = (totalCollateralAmount * jpAmount) / data.settleAmountBorrow;
 
         bool burned = IDebtTokenLike(pool.jpToken).burn(msg.sender, jpAmount);
         require(burned, "LearningPledgePool: jp burn failed");
@@ -553,8 +652,11 @@ contract LearningPledgePool {
         _;
     }
 
-    modifier stateFinish(uint256 poolId) {
-        require(pools[poolId].state == PoolState.REPAID, "LearningPledgePool: pool not finish");
+    modifier stateClosed(uint256 poolId) {
+        require(
+            pools[poolId].state == PoolState.REPAID || pools[poolId].state == PoolState.LIQUIDATION,
+            "LearningPledgePool: pool not closed"
+        );
         _;
     }
 

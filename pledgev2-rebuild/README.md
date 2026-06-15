@@ -152,7 +152,29 @@ Contract changes:
 
 - `contracts/dex/LearningDexRouter.sol`
 - `LearningPledgePool.setDexRouter`
-- `LearningPledgePool.finishWithDex`
+- `LearningPledgePool.repayPool`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step8
+```
+
+Learning goal:
+
+- Swap matched borrower collateral into lender repayment token at repay.
+- Use a max-collateral input as slippage protection.
+- Keep remaining collateral available for JP holders after the DEX swap.
+
+## Step 9
+
+Contract changes:
+
+- `LearningPledgePool.isLiquidatable`
+- `LearningPledgePool.liquidate`
+- liquidation-aware `withdrawLend`
+- liquidation-aware `withdrawBorrow`
 
 Run:
 
@@ -163,6 +185,6 @@ npm run test:step9
 
 Learning goal:
 
-- Swap matched borrower collateral into lender repayment token at finish.
-- Use a max-collateral input as slippage protection.
-- Keep remaining collateral available for JP holders after the DEX swap.
+- Detect unhealthy collateral using current oracle prices.
+- Sell collateral through the DEX before normal repayment.
+- Distribute liquidation proceeds to SP holders and any remaining collateral to JP holders.

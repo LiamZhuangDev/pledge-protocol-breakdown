@@ -24,9 +24,8 @@ Add `claimLend` and `claimBorrow`.
 Lenders receive SP (senior/supply pool) tokens. 
 Borrowers receive JP (junior poll) tokens and match lendToken loan.
 
-### 8. Finish Flow
-Add interest calculation first without Uniswap.
-Then add router swap later.
+### 8. Repay Flow
+Add interest calculation and repay lenders with DEX Swap.
 
 ### 9. Liquidation Flow
 Add `checkoutLiquidate`. Then add `liquidate`.
