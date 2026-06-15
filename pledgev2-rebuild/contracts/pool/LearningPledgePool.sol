@@ -6,6 +6,7 @@ pragma solidity ^0.8.24;
 // lendToken: USDT / USDC / BUSD
 // borrowToken: WBTC / WETH / DAI
 interface IERC20Like {
+    function approve(address spender, uint256 amount) external returns (bool);
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
@@ -20,10 +21,21 @@ interface IOracleLike {
     function getPrice(address asset) external view returns (uint256);
 }
 
+interface IDexRouterLike {
+    function getAmountIn(address tokenIn, address tokenOut, uint256 amountOut) external view returns (uint256);
+    function swapTokensForExactTokens(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountOut,
+        uint256 amountInMax,
+        address recipient
+    ) external returns (uint256 amountIn);
+}
+
 contract LearningPledgePool {
     uint256 private constant RATE_BASE = 1e8;
     uint256 private constant PRICE_SCALE = 1e18;
-    uint256 private constant SECONDS_PER_YEAR = 365 days;
+    uint256 private constant SECONDS_PER_YEAR = 365 days; // days is a Solidity time unit, it converts to seconds at compile time
 
     enum PoolState {
         MATCH,
@@ -87,6 +99,7 @@ contract LearningPledgePool {
 
     address public owner;
     address public oracle;
+    address public dexRouter;
     address payable public feeAddress;
     bool public globalPaused;
     uint256 public minLendAmount = 100 ether;
@@ -108,6 +121,7 @@ contract LearningPledgePool {
         uint256 endTime
     );
     event FeeAddressUpdated(address indexed previousFeeAddress, address indexed newFeeAddress);
+    event DexRouterUpdated(address indexed previousDexRouter, address indexed newDexRouter);
     event MinLendAmountUpdated(uint256 previousMinAmount, uint256 newMinAmount);
     event MinBorrowAmountUpdated(uint256 previousMinAmount, uint256 newMinAmount);
     event PauseUpdated(bool paused);
@@ -124,6 +138,13 @@ contract LearningPledgePool {
         uint256 loanAmount
     );
     event Finish(uint256 indexed poolId, uint256 repaymentAmount, uint256 remainingCollateralAmount);
+    event DexFinish(
+        uint256 indexed poolId,
+        address indexed router,
+        uint256 collateralSold,
+        uint256 repaymentAmount,
+        uint256 remainingCollateralAmount
+    );
     event WithdrawLend(address indexed lender, uint256 indexed poolId, uint256 spAmount, uint256 lendAmount);
     event WithdrawBorrow(address indexed borrower, uint256 indexed poolId, uint256 jpAmount, uint256 collateralAmount);
     event StateChanged(uint256 indexed poolId, PoolState previousState, PoolState newState);
@@ -415,6 +436,48 @@ contract LearningPledgePool {
         emit Finish(poolId, repaymentAmount, data.finishAmountBorrow);
     }
 
+    function finishWithDex(uint256 poolId, uint256 maxCollateralAmount)
+        external
+        onlyOwner
+        whenNotPaused
+        poolExists(poolId)
+        stateExecution(poolId)
+        afterEnd(poolId)
+    {
+        require(dexRouter != address(0), "LearningPledgePool: dex router not set");
+
+        PoolBaseInfo storage pool = pools[poolId];
+        PoolDataInfo storage data = poolData[poolId];
+        uint256 requiredRepayment = getRequiredRepayment(poolId);
+        uint256 collateralToSell = IDexRouterLike(dexRouter).getAmountIn(
+            pool.borrowToken,
+            pool.lendToken,
+            requiredRepayment
+        );
+
+        require(collateralToSell <= maxCollateralAmount, "LearningPledgePool: dex slippage too high");
+        require(collateralToSell <= data.settleAmountBorrow, "LearningPledgePool: insufficient collateral");
+
+        bool approved = IERC20Like(pool.borrowToken).approve(dexRouter, collateralToSell);
+        require(approved, "LearningPledgePool: collateral approve failed");
+
+        uint256 soldAmount = IDexRouterLike(dexRouter).swapTokensForExactTokens(
+            pool.borrowToken,
+            pool.lendToken,
+            requiredRepayment,
+            maxCollateralAmount,
+            address(this)
+        );
+
+        data.finishAmountLend = requiredRepayment;
+        data.finishAmountBorrow = data.settleAmountBorrow - soldAmount;
+
+        _setPoolState(poolId, PoolState.FINISH);
+
+        emit DexFinish(poolId, dexRouter, soldAmount, requiredRepayment, data.finishAmountBorrow);
+        emit Finish(poolId, requiredRepayment, data.finishAmountBorrow);
+    }
+
     function withdrawLend(uint256 poolId, uint256 spAmount)
         external
         whenNotPaused
@@ -471,6 +534,13 @@ contract LearningPledgePool {
 
         emit FeeAddressUpdated(feeAddress, newFeeAddress);
         feeAddress = newFeeAddress;
+    }
+
+    function setDexRouter(address newDexRouter) external onlyOwner {
+        require(newDexRouter != address(0), "LearningPledgePool: zero dex router");
+
+        emit DexRouterUpdated(dexRouter, newDexRouter);
+        dexRouter = newDexRouter;
     }
 
     function setMinLendAmount(uint256 newMinAmount) external onlyOwner {

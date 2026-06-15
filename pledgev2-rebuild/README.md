@@ -167,3 +167,24 @@ Learning goal:
 - Calculate fixed-term interest from the matched lender amount.
 - Simulate final repayment without adding a DEX yet.
 - Burn SP tokens for lender repayment and JP tokens for borrower collateral withdrawal.
+
+## Step 9
+
+Contract changes:
+
+- `contracts/dex/LearningDexRouter.sol`
+- `LearningPledgePool.setDexRouter`
+- `LearningPledgePool.finishWithDex`
+
+Run:
+
+```bash
+cd pledgev2-rebuild
+npm run test:step9
+```
+
+Learning goal:
+
+- Swap matched borrower collateral into lender repayment token at finish.
+- Use a max-collateral input as slippage protection.
+- Keep remaining collateral available for JP holders after the DEX swap.
