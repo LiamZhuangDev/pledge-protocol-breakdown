@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"pledgev2-rebackend/internal/auth"
 	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/httpserver"
@@ -28,7 +29,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpserver.New(cfg, logger, repo)
+	authService := auth.NewService(auth.Config{
+		AdminUsername: cfg.AdminUsername,
+		AdminPassword: cfg.AdminPassword,
+		TokenSecret:   cfg.TokenSecret,
+		TokenTTL:      cfg.TokenTTL,
+	})
+
+	server := httpserver.New(cfg, logger, repo, authService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

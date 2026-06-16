@@ -254,6 +254,85 @@ the repository.
 
 ## Step 6: Admin auth
 
+Files:
+
+- `internal/auth/service.go`
+- `internal/auth/service_test.go`
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+
+Run:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_ENV=local \
+PLEDGE_CHAIN_ID=97 \
+PLEDGE_API_VERSION=1 \
+PLEDGE_API_PORT=8081 \
+PLEDGE_ADMIN_USERNAME=admin \
+PLEDGE_ADMIN_PASSWORD=password \
+PLEDGE_TOKEN_SECRET=local-secret \
+PLEDGE_TOKEN_TTL=1h \
+go run ./cmd/api
+```
+
+Login:
+
+```bash
+curl -X POST "http://localhost:8081/api/v1/user/login" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"admin","password":"password"}'
+```
+
+Use the returned `tokenId`:
+
+```bash
+curl "http://localhost:8081/api/v1/admin/session" \
+  -H "Authorization: Bearer <tokenId>"
+```
+
+Logout:
+
+```bash
+curl -X POST "http://localhost:8081/api/v1/user/logout" \
+  -H "Authorization: Bearer <tokenId>"
+```
+
+Run Go Tests:
+
+```bash
+cd pledgev2-rebackend
+go test ./...
+```
+
+Learning goal:
+
+- Add config-driven admin credentials.
+- Issue signed tokens after login.
+- Track active sessions in memory so logout can revoke a token.
+- Protect admin routes with auth middleware.
+- Keep compatibility with the original backend's `authCode` header while also
+  supporting the common `Authorization: Bearer ...` header.
+
+Important for this checkpoint:
+
+```text
+Sessions are still in memory. In the original backend, Redis stores login state
+so logout survives across API processes. We will keep that idea in mind when
+real storage/cache integration is added.
+```
+
+In interview, say:
+
+```text
+I added admin auth as a small middleware layer. Login checks configured admin
+credentials, returns a signed token, and stores an active session. Protected
+routes verify the token signature and session state, and logout removes the
+session so the same token can no longer be used.
+```
+
 ## Step 7: Price service
 
 ## Step 8: Multisig/admin config API
