@@ -10,6 +10,7 @@ import (
 
 	"pledgev2-rebackend/internal/auth"
 	"pledgev2-rebackend/internal/config"
+	"pledgev2-rebackend/internal/multisig"
 	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
@@ -36,6 +37,10 @@ type priceResponse struct {
 	Data price.Quote `json:"data"`
 }
 
+type dataResponse[T any] struct {
+	Data T `json:"data"`
+}
+
 type loginRequest struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
@@ -49,11 +54,28 @@ type sessionResponse struct {
 	Username string `json:"username"`
 }
 
+type setMultiSignRequest struct {
+	ChainID          string   `json:"chain_id"`
+	SPName           string   `json:"sp_name"`
+	SPToken          string   `json:"_spToken"`
+	JPName           string   `json:"jp_name"`
+	JPToken          string   `json:"_jpToken"`
+	SPAddress        string   `json:"sp_address"`
+	JPAddress        string   `json:"jp_address"`
+	SPHash           string   `json:"spHash"`
+	JPHash           string   `json:"jpHash"`
+	MultiSignAccount []string `json:"multi_sign_account"`
+}
+
+type getMultiSignRequest struct {
+	ChainID string `json:"chain_id"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service, priceService *price.Service) *http.Server {
+func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -165,6 +187,49 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authServ
 	mux.Handle("GET "+apiPrefix+"/admin/session", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username := r.Context().Value(usernameContextKey{}).(string)
 		writeJSON(w, http.StatusOK, sessionResponse{Username: username})
+	})))
+
+	mux.Handle("POST "+apiPrefix+"/pool/setMultiSign", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := setMultiSignRequest{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig body"})
+			return
+		}
+
+		cfg := multisig.Config{
+			ChainID:          req.ChainID,
+			SPName:           req.SPName,
+			SPToken:          req.SPToken,
+			JPName:           req.JPName,
+			JPToken:          req.JPToken,
+			SPAddress:        req.SPAddress,
+			JPAddress:        req.JPAddress,
+			SPHash:           req.SPHash,
+			JPHash:           req.JPHash,
+			MultiSignAccount: req.MultiSignAccount,
+		}
+		if err := multisigService.Set(r.Context(), cfg); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, dataResponse[multisig.Config]{Data: cfg})
+	})))
+
+	mux.Handle("POST "+apiPrefix+"/pool/getMultiSign", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := getMultiSignRequest{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig body"})
+			return
+		}
+
+		cfg, err := multisigService.Get(r.Context(), req.ChainID)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "multisig config not found"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, dataResponse[multisig.Config]{Data: cfg})
 	})))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

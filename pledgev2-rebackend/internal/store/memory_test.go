@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"pledgev2-rebackend/internal/multisig"
 )
 
 func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
@@ -85,6 +87,40 @@ func TestMemoryStoreReturnsErrNotFound(t *testing.T) {
 	_, err := store.GetToken(context.Background(), TokenKey{ChainID: "97", Address: "0xmissing"})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestMemoryStoreSavesMultiSignConfig(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	now := time.Date(2026, 6, 16, 12, 0, 0, 0, time.UTC)
+	store.SetClockForTest(func() time.Time { return now })
+
+	err := store.Save(ctx, multisig.Config{
+		ChainID:          "97",
+		SPName:           "SP",
+		MultiSignAccount: []string{"0xowner1"},
+	})
+	if err != nil {
+		t.Fatalf("save multisig: %v", err)
+	}
+
+	cfg, err := store.Get(ctx, "97")
+	if err != nil {
+		t.Fatalf("get multisig: %v", err)
+	}
+	if cfg.SPName != "SP" {
+		t.Fatalf("expected SP, got %+v", cfg)
+	}
+	if cfg.CreatedAt != now || cfg.UpdatedAt != now {
+		t.Fatalf("unexpected timestamps: %+v", cfg)
+	}
+}
+
+func TestMemoryStoreReturnsMultiSignNotFound(t *testing.T) {
+	_, err := NewMemoryStore().Get(context.Background(), "97")
+	if !errors.Is(err, multisig.ErrNotFound) {
+		t.Fatalf("expected multisig not found, got %v", err)
 	}
 }
 

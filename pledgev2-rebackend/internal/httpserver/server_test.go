@@ -14,6 +14,7 @@ import (
 	"pledgev2-rebackend/internal/auth"
 	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
+	"pledgev2-rebackend/internal/multisig"
 	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
@@ -182,6 +183,68 @@ func TestLogoutRevokesToken(t *testing.T) {
 	}
 }
 
+func TestSetAndGetMultiSign(t *testing.T) {
+	server := newTestServer(t)
+	token := loginForTest(t, server)
+
+	body := bytes.NewBufferString(`{
+		"chain_id":"97",
+		"sp_name":"SP",
+		"_spToken":"SP",
+		"jp_name":"JP",
+		"_jpToken":"JP",
+		"sp_address":"0xsp",
+		"jp_address":"0xjp",
+		"spHash":"0xsphash",
+		"jpHash":"0xjphash",
+		"multi_sign_account":["0xowner1","0xowner2"]
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pool/setMultiSign", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected set status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	body = bytes.NewBufferString(`{"chain_id":"97"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/pool/getMultiSign", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected get status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response dataResponse[multisig.Config]
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Data.SPName != "SP" {
+		t.Fatalf("expected SP config, got %+v", response.Data)
+	}
+	if len(response.Data.MultiSignAccount) != 2 {
+		t.Fatalf("expected two multisig accounts, got %+v", response.Data.MultiSignAccount)
+	}
+}
+
+func TestSetMultiSignRequiresAuth(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pool/setMultiSign", bytes.NewBufferString(`{}`))
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
 func newTestServer(t *testing.T) *http.Server {
 	t.Helper()
 
@@ -201,6 +264,7 @@ func newTestServer(t *testing.T) *http.Server {
 			TokenTTL:      time.Hour,
 		}),
 		price.NewService(price.NewDemoProvider()),
+		multisig.NewService(repo),
 	)
 }
 

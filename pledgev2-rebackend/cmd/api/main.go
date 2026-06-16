@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/httpserver"
 	"pledgev2-rebackend/internal/logging"
+	"pledgev2-rebackend/internal/multisig"
 	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
@@ -23,7 +25,13 @@ func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
 
-	repo := store.NewMemoryStore()
+	repo, closeStore, err := openStore(context.Background(), cfg)
+	if err != nil {
+		logger.Error("open store failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer closeStore()
+
 	reader := chain.NewDemoReader()
 	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
 		logger.Error("sync demo contract data failed", slog.Any("error", err))
@@ -37,8 +45,9 @@ func main() {
 		TokenTTL:      cfg.TokenTTL,
 	})
 	priceService := price.NewService(price.NewDemoProvider())
+	multisigService := multisig.NewService(repo)
 
-	server := httpserver.New(cfg, logger, repo, authService, priceService)
+	server := httpserver.New(cfg, logger, repo, authService, priceService, multisigService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))
@@ -49,6 +58,21 @@ func main() {
 	}()
 
 	waitForShutdown(server, logger)
+}
+
+func openStore(ctx context.Context, cfg config.Config) (store.Repository, func(), error) {
+	switch cfg.StoreDriver {
+	case "memory":
+		return store.NewMemoryStore(), func() {}, nil
+	case "mysql":
+		mysqlStore, err := store.OpenMySQL(ctx, cfg.MySQLDSN)
+		if err != nil {
+			return nil, nil, err
+		}
+		return mysqlStore, func() { _ = mysqlStore.Close() }, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported store driver %q", cfg.StoreDriver)
+	}
 }
 
 func waitForShutdown(server *http.Server, logger *slog.Logger) {

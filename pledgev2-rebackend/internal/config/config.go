@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ const (
 	defaultTokenTTL    = time.Hour
 	defaultTokenSecret = "local-development-secret"
 	defaultPriceSymbol = "PLGR"
+	defaultStoreDriver = "memory"
 )
 
 type Config struct {
@@ -29,6 +31,8 @@ type Config struct {
 	TokenSecret   string
 	TokenTTL      time.Duration
 	PriceSymbol   string
+	StoreDriver   string
+	MySQLDSN      string
 }
 
 func Load() Config {
@@ -43,6 +47,8 @@ func Load() Config {
 		TokenSecret:   readEnv("PLEDGE_TOKEN_SECRET", defaultTokenSecret),
 		TokenTTL:      readDurationEnv("PLEDGE_TOKEN_TTL", defaultTokenTTL),
 		PriceSymbol:   readEnv("PLEDGE_PRICE_SYMBOL", defaultPriceSymbol),
+		StoreDriver:   strings.ToLower(readEnv("PLEDGE_STORE", defaultStoreDriver)),
+		MySQLDSN:      readEnv("PLEDGE_MYSQL_DSN", ""),
 	}
 }
 
