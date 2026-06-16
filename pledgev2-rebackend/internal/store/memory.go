@@ -94,6 +94,24 @@ func (s *MemoryStore) ListPoolBases(_ context.Context, chainID string) ([]PoolBa
 	return pools, nil
 }
 
+func (s *MemoryStore) ListPoolData(_ context.Context, chainID string) ([]PoolData, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pools := make([]PoolData, 0)
+	for _, data := range s.poolData {
+		if data.Key.ChainID == chainID {
+			pools = append(pools, data)
+		}
+	}
+
+	sort.Slice(pools, func(i, j int) bool {
+		return pools[i].Key.PoolID < pools[j].Key.PoolID
+	})
+
+	return pools, nil
+}
+
 func (s *MemoryStore) UpsertToken(_ context.Context, token TokenInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

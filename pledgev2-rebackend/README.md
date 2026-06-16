@@ -103,6 +103,53 @@ storage is memory, MySQL, or a test double.
 
 ## Step 3: Read-only API
 
+Files:
+
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/store/seed.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+
+Run:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_ENV=local PLEDGE_API_VERSION=1 PLEDGE_API_PORT=8081 go run ./cmd/api
+```
+
+Then query:
+
+```bash
+curl "http://localhost:8081/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8081/api/v1/poolDataInfo?chainId=97"
+curl "http://localhost:8081/api/v1/token?chainId=97"
+```
+
+Run Go Tests:
+
+```bash
+cd pledgev2-rebackend
+go test ./...
+```
+
+Learning goal:
+
+- Expose the first read-only API routes from the original backend.
+- Keep route handlers thin: parse `chainId`, call the repository, return JSON.
+- Serve data from the repository interface instead of hardcoding storage details
+  into the HTTP layer.
+- Use seeded memory data until the contract reader and MySQL store are added.
+
+In interview, say:
+
+```text
+I added the read API as a thin layer over the repository. The handlers validate
+request parameters, read pool/token snapshots from storage, and return JSON.
+Because the API depends on an interface, the same routes can later read from
+MySQL without changing handler behavior.
+```
+
 ## Step 4: Contract reader
 
 ## Step 5: Scheduler

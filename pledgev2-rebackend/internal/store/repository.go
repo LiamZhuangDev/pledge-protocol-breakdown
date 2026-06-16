@@ -13,6 +13,7 @@ type PoolRepository interface {
 	GetPoolBase(ctx context.Context, key PoolKey) (PoolBase, error)
 	GetPoolData(ctx context.Context, key PoolKey) (PoolData, error)
 	ListPoolBases(ctx context.Context, chainID string) ([]PoolBase, error)
+	ListPoolData(ctx context.Context, chainID string) ([]PoolData, error)
 }
 
 type TokenRepository interface {
