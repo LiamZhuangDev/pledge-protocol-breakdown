@@ -10,6 +10,7 @@ import (
 
 	"pledgev2-rebackend/internal/auth"
 	"pledgev2-rebackend/internal/config"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
 
@@ -31,6 +32,10 @@ type tokenListResponse struct {
 	Data []store.TokenInfo `json:"data"`
 }
 
+type priceResponse struct {
+	Data price.Quote `json:"data"`
+}
+
 type loginRequest struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
@@ -48,7 +53,7 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service) *http.Server {
+func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service, priceService *price.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -118,6 +123,21 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authServ
 			return
 		}
 		writeJSON(w, http.StatusOK, tokenListResponse{Data: tokens})
+	})
+
+	mux.HandleFunc("GET "+apiPrefix+"/price", func(w http.ResponseWriter, r *http.Request) {
+		symbol := r.URL.Query().Get("symbol")
+		if symbol == "" {
+			symbol = cfg.PriceSymbol
+		}
+
+		quote, err := priceService.Latest(r.Context(), symbol)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "price not found"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, priceResponse{Data: quote})
 	})
 
 	mux.HandleFunc("POST "+apiPrefix+"/user/login", func(w http.ResponseWriter, r *http.Request) {

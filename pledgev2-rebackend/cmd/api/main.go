@@ -15,6 +15,7 @@ import (
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/httpserver"
 	"pledgev2-rebackend/internal/logging"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
 
@@ -35,8 +36,9 @@ func main() {
 		TokenSecret:   cfg.TokenSecret,
 		TokenTTL:      cfg.TokenTTL,
 	})
+	priceService := price.NewService(price.NewDemoProvider())
 
-	server := httpserver.New(cfg, logger, repo, authService)
+	server := httpserver.New(cfg, logger, repo, authService, priceService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

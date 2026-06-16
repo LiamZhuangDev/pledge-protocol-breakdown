@@ -10,6 +10,7 @@ import (
 	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/logging"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/scheduler"
 	"pledgev2-rebackend/internal/store"
 )
@@ -20,7 +21,8 @@ func main() {
 
 	repo := store.NewMemoryStore()
 	reader := chain.NewDemoReader()
-	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, logger)
+	priceService := price.NewService(price.NewDemoProvider())
+	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, logger, priceService, cfg.PriceSymbol)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -29,6 +31,7 @@ func main() {
 		"scheduler starting",
 		slog.String("chainID", cfg.ChainID),
 		slog.Duration("interval", cfg.SyncInterval),
+		slog.String("priceSymbol", cfg.PriceSymbol),
 	)
 
 	if err := syncer.Run(ctx, cfg.SyncInterval); err != nil {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"pledgev2-rebackend/internal/chain"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
 
@@ -15,14 +16,18 @@ type PoolSyncer struct {
 	repo    store.Repository
 	chainID string
 	logger  *slog.Logger
+	prices  *price.Service
+	symbol  string
 }
 
-func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, logger *slog.Logger) *PoolSyncer {
+func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, logger *slog.Logger, prices *price.Service, symbol string) *PoolSyncer {
 	return &PoolSyncer{
 		reader:  reader,
 		repo:    repo,
 		chainID: chainID,
 		logger:  logger,
+		prices:  prices,
+		symbol:  symbol,
 	}
 }
 
@@ -46,6 +51,21 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		slog.Int("pools", len(pools)),
 		slog.Int("tokens", len(tokens)),
 	)
+
+	if s.prices != nil && s.symbol != "" {
+		quote, err := s.prices.Latest(ctx, s.symbol)
+		if err != nil {
+			return fmt.Errorf("refresh price %s: %w", s.symbol, err)
+		}
+		s.logger.Info(
+			"price refresh completed",
+			slog.String("symbol", quote.Symbol),
+			slog.String("currency", quote.Currency),
+			slog.String("price", quote.Price),
+			slog.String("source", quote.Source),
+		)
+	}
+
 	return nil
 }
 

@@ -335,4 +335,77 @@ session so the same token can no longer be used.
 
 ## Step 7: Price service
 
+Files:
+
+- `internal/price/service.go`
+- `internal/price/demo_provider.go`
+- `internal/price/service_test.go`
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/scheduler/pool_syncer.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+- `cmd/scheduler/main.go`
+
+Run API:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_ENV=local \
+PLEDGE_CHAIN_ID=97 \
+PLEDGE_API_VERSION=1 \
+PLEDGE_API_PORT=8081 \
+PLEDGE_PRICE_SYMBOL=PLGR \
+go run ./cmd/api
+```
+
+Query latest price:
+
+```bash
+curl "http://localhost:8081/api/v1/price?symbol=PLGR"
+```
+
+Run scheduler:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_ENV=local \
+PLEDGE_CHAIN_ID=97 \
+PLEDGE_SYNC_INTERVAL=30s \
+PLEDGE_PRICE_SYMBOL=PLGR \
+go run ./cmd/scheduler
+```
+
+Run Go Tests:
+
+```bash
+cd pledgev2-rebackend
+go test ./...
+```
+
+Learning goal:
+
+- Add a dedicated price service instead of mixing price logic into HTTP routes.
+- Keep the price provider behind an interface so a future KuCoin or oracle
+  provider can replace the demo provider.
+- Expose `GET /api/v1/price?symbol=PLGR` for a simple latest-price read.
+- Let the scheduler refresh/log the configured price symbol on each sync cycle.
+
+Important for this checkpoint:
+
+```text
+The original backend streams PLGR-USDT through a websocket. This rebuild starts
+with a normal JSON endpoint and a demo provider so the service boundary is
+clear before adding websocket or external exchange dependencies.
+```
+
+In interview, say:
+
+```text
+I separated market price lookup into a price service. The API asks the service
+for the latest quote, and the scheduler can refresh the same quote on its
+interval. The provider is an interface, so the demo provider can later be
+replaced by KuCoin, an oracle, or another price source.
+```
+
 ## Step 8: Multisig/admin config API

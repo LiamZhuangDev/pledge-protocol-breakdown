@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"pledgev2-rebackend/internal/chain"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
 
@@ -18,6 +19,8 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 		repo,
 		"97",
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		price.NewService(price.NewDemoProvider()),
+		"PLGR",
 	)
 
 	if err := syncer.RunOnce(ctx); err != nil {

@@ -15,6 +15,7 @@ const (
 	defaultAdminPass   = "password"
 	defaultTokenTTL    = time.Hour
 	defaultTokenSecret = "local-development-secret"
+	defaultPriceSymbol = "PLGR"
 )
 
 type Config struct {
@@ -27,6 +28,7 @@ type Config struct {
 	AdminPassword string
 	TokenSecret   string
 	TokenTTL      time.Duration
+	PriceSymbol   string
 }
 
 func Load() Config {
@@ -40,6 +42,7 @@ func Load() Config {
 		AdminPassword: readEnv("PLEDGE_ADMIN_PASSWORD", defaultAdminPass),
 		TokenSecret:   readEnv("PLEDGE_TOKEN_SECRET", defaultTokenSecret),
 		TokenTTL:      readDurationEnv("PLEDGE_TOKEN_TTL", defaultTokenTTL),
+		PriceSymbol:   readEnv("PLEDGE_PRICE_SYMBOL", defaultPriceSymbol),
 	}
 }
 

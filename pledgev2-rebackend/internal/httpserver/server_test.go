@@ -14,6 +14,7 @@ import (
 	"pledgev2-rebackend/internal/auth"
 	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
+	"pledgev2-rebackend/internal/price"
 	"pledgev2-rebackend/internal/store"
 )
 
@@ -99,6 +100,28 @@ func TestTokenList(t *testing.T) {
 	}
 }
 
+func TestPrice(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/price?symbol=PLGR", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var body priceResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body.Data.Symbol != "PLGR" || body.Data.Price != "0.0027" {
+		t.Fatalf("unexpected price response: %+v", body.Data)
+	}
+}
+
 func TestLoginAndProtectedSession(t *testing.T) {
 	server := newTestServer(t)
 
@@ -177,6 +200,7 @@ func newTestServer(t *testing.T) *http.Server {
 			TokenSecret:   "test-secret",
 			TokenTTL:      time.Hour,
 		}),
+		price.NewService(price.NewDemoProvider()),
 	)
 }
 
