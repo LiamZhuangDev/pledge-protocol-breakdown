@@ -3,8 +3,20 @@
 This is a clean Go backend rebuild for learning how the original `pledge-backend`
 works.
 
-The original backend is left alone. Each checkpoint should add only the code
-needed for that step.
+- API server: serve frontend/admin HTTP APIs, token list, pool data, login, websocket price push.
+
+- Scheduler worker: read on-chain pool/oracle data and save snapshots into MySQL.
+
+```mermaid
+flowchart LR
+  Contract[PledgePool + Oracle contracts] --> Scheduler[Go scheduler]
+  Scheduler --> MySQL[(MySQL canonical pool/token data)]
+  Scheduler --> Redis[(Redis cache/change markers)]
+  KuCoin[KuCoin PLGR price] --> API[Go API server]
+  Redis --> API
+  MySQL --> API
+  API --> Frontend[pledge-fe]
+```
 
 ## Step 1: Runnable API Skeleton
 
@@ -50,3 +62,53 @@ I started the backend rebuild with a small runnable API skeleton. The first
 checkpoint proves the process can load config, start an HTTP server, and expose
 a health check before adding storage or chain indexing.
 ```
+## Step 2: Database models
+
+Files:
+
+- `internal/store/models.go`
+- `internal/store/repository.go`
+- `internal/store/memory.go`
+- `internal/store/memory_test.go`
+
+Run:
+
+```bash
+cd pledgev2-rebackend
+go test ./...
+```
+
+Learning goal:
+
+- Model the three core backend tables from the original project:
+  `poolbases`, `pooldata`, and `token_info`.
+- Keep chain values and token amounts as strings because contract values are
+  large integer strings, not floats.
+- Use `chainID + poolID` as the logical pool key.
+- Use `chainID + token address` as the logical token key.
+- Add a repository interface before adding MySQL so the API can depend on
+  behavior instead of a concrete database driver.
+
+For now, Step 2 uses an in-memory repository. MySQL comes later after the API
+shape is clear.
+
+In interview, say:
+
+```text
+I modeled the backend data around the same source-of-truth snapshots as the
+original service: pool base config, pool settlement data, and token metadata.
+The repository interface lets the API read pool data without caring whether the
+storage is memory, MySQL, or a test double.
+```
+
+## Step 3: Read-only API
+
+## Step 4: Contract reader
+
+## Step 5: Scheduler
+
+## Step 6: Admin auth
+
+## Step 7: Price service
+
+## Step 8: Multisig/admin config API
