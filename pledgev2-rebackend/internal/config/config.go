@@ -6,12 +6,14 @@ const (
 	defaultEnv        = "local"
 	defaultPort       = "8080"
 	defaultAPIVersion = "1"
+	defaultChainID    = "97"
 )
 
 type Config struct {
 	Env        string
 	Port       string
 	APIVersion string
+	ChainID    string
 }
 
 func Load() Config {
@@ -19,6 +21,7 @@ func Load() Config {
 		Env:        readEnv("PLEDGE_ENV", defaultEnv),
 		Port:       readEnv("PLEDGE_API_PORT", defaultPort),
 		APIVersion: readEnv("PLEDGE_API_VERSION", defaultAPIVersion),
+		ChainID:    readEnv("PLEDGE_CHAIN_ID", defaultChainID),
 	}
 }
 

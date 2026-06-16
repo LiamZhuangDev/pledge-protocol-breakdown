@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/store"
 )
@@ -99,8 +100,8 @@ func newTestServer(t *testing.T) *http.Server {
 	t.Helper()
 
 	repo := store.NewMemoryStore()
-	if err := store.SeedDemoData(context.Background(), repo); err != nil {
-		t.Fatalf("seed demo data: %v", err)
+	if err := chain.SyncPools(context.Background(), chain.NewDemoReader(), repo, "97"); err != nil {
+		t.Fatalf("sync demo contract data: %v", err)
 	}
 
 	return New(

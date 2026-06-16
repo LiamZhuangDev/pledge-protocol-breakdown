@@ -107,7 +107,7 @@ Files:
 
 - `internal/httpserver/server.go`
 - `internal/httpserver/server_test.go`
-- `internal/store/seed.go`
+- `internal/chain/demo_reader.go`
 - `internal/config/config.go`
 - `cmd/api/main.go`
 
@@ -151,6 +151,58 @@ MySQL without changing handler behavior.
 ```
 
 ## Step 4: Contract reader
+
+Files:
+
+- `internal/chain/reader.go`
+- `internal/chain/demo_reader.go`
+- `internal/chain/sync.go`
+- `internal/chain/sync_test.go`
+- `cmd/api/main.go`
+- `internal/config/config.go`
+
+Run:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_ENV=local PLEDGE_CHAIN_ID=97 PLEDGE_API_VERSION=1 PLEDGE_API_PORT=8081 go run ./cmd/api
+```
+
+Then query:
+
+```bash
+curl "http://localhost:8081/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8081/api/v1/poolDataInfo?chainId=97"
+curl "http://localhost:8081/api/v1/token?chainId=97"
+```
+
+Run Go Tests:
+
+```bash
+cd pledgev2-rebackend
+go test ./...
+```
+
+Learning goal:
+
+- Define the boundary between backend code and on-chain contract reads.
+- Keep raw contract-shaped data separate from database/API models.
+- Translate contract indexes into API pool IDs: contract index `0` becomes
+  `poolID = 1`.
+- Sync pool base data, pool settlement data, and token metadata into the
+  repository through one function.
+
+For now, Step 4 uses `DemoReader` instead of a real RPC client. The next real
+reader can implement the same `chain.Reader` interface.
+
+In interview, say:
+
+```text
+I separated contract reading from storage. The reader returns raw PledgePool
+snapshots, and the sync function maps those snapshots into repository models.
+That keeps RPC/ABI details out of the HTTP layer and gives the scheduler one
+clear job: read contract state and persist the indexed snapshot.
+```
 
 ## Step 5: Scheduler
 

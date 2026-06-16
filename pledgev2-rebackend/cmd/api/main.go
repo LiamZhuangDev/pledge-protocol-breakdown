@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/httpserver"
 	"pledgev2-rebackend/internal/logging"
@@ -21,8 +22,9 @@ func main() {
 	logger := logging.New(cfg.Env)
 
 	repo := store.NewMemoryStore()
-	if err := store.SeedDemoData(context.Background(), repo); err != nil {
-		logger.Error("seed demo data failed", slog.Any("error", err))
+	reader := chain.NewDemoReader()
+	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
+		logger.Error("sync demo contract data failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 
