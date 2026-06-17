@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pledgev2-rebackend/internal/auth"
+	"pledgev2-rebackend/internal/cache"
 	"pledgev2-rebackend/internal/chain"
 	"pledgev2-rebackend/internal/config"
 	"pledgev2-rebackend/internal/httpserver"
@@ -32,6 +33,13 @@ func main() {
 	}
 	defer closeStore()
 
+	cacheStore, closeCache, err := openCache(context.Background(), cfg)
+	if err != nil {
+		logger.Error("open cache failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer closeCache()
+
 	reader := chain.NewDemoReader()
 	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
 		logger.Error("sync demo contract data failed", slog.Any("error", err))
@@ -44,7 +52,8 @@ func main() {
 		TokenSecret:   cfg.TokenSecret,
 		TokenTTL:      cfg.TokenTTL,
 	})
-	priceService := price.NewService(price.NewDemoProvider())
+	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
+	priceService := price.NewService(priceProvider)
 	multisigService := multisig.NewService(repo)
 
 	server := httpserver.New(cfg, logger, repo, authService, priceService, multisigService)
@@ -58,6 +67,18 @@ func main() {
 	}()
 
 	waitForShutdown(server, logger)
+}
+
+func openCache(ctx context.Context, cfg config.Config) (cache.Cache, func(), error) {
+	redisCache, err := cache.OpenRedis(ctx, cache.RedisConfig{
+		Address:  cfg.RedisAddress,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return redisCache, func() { _ = redisCache.Close() }, nil
 }
 
 func openStore(ctx context.Context, cfg config.Config) (store.Repository, func(), error) {

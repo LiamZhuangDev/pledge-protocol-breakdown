@@ -5,17 +5,105 @@ works.
 
 - API server: serve frontend/admin HTTP APIs, token list, pool data, login, websocket price push.
 
-- Scheduler worker: read on-chain pool/oracle data and save snapshots into MySQL.
+- Scheduler worker: read on-chain pool/oracle data and save snapshots into data store.
 
 ```mermaid
 flowchart LR
-  Contract[PledgePool + Oracle contracts] --> Scheduler[Go scheduler]
-  Scheduler --> MySQL[(MySQL canonical pool/token data)]
-  Scheduler --> Redis[(Redis cache/change markers)]
-  KuCoin[KuCoin PLGR price] --> API[Go API server]
-  Redis --> API
-  MySQL --> API
-  API --> Frontend[pledge-fe]
+  Contract[PledgePool + Oracle reader] --> Scheduler[Scheduler worker]
+  Contract --> APIBootstrap[API startup sync]
+  Scheduler --> Store[(Memory or MySQL store)]
+  APIBootstrap --> Store
+  Price[Demo price provider] --> Cache[(Memory or Redis cache)]
+  Cache --> API[API server]
+  Scheduler --> Cache
+  Store --> API
+  API --> Frontend[Frontend / curl]
+```
+
+## API Endpoints
+
+Health:
+
+```text
+GET  /healthz
+```
+
+Public read APIs:
+
+```text
+GET  /api/v1/poolBaseInfo?chainId=97
+GET  /api/v1/poolDataInfo?chainId=97
+GET  /api/v1/token?chainId=97
+GET  /api/v1/price?symbol=PLGR
+```
+
+Auth APIs:
+
+```text
+POST /api/v1/user/login
+POST /api/v1/user/logout
+```
+
+Protected admin APIs:
+
+```text
+GET  /api/v1/admin/session
+POST /api/v1/pool/setMultiSign
+POST /api/v1/pool/getMultiSign
+```
+
+Protected routes require either header:
+
+```text
+Authorization: Bearer <tokenId>
+```
+
+or:
+
+```text
+authCode: <tokenId>
+```
+
+The `/api/v1` prefix uses `PLEDGE_API_VERSION=1`.
+
+## Cache
+
+The rebuild uses Redis for runtime caching. Currently Redis caches price quotes
+such as `price:PLGR`.
+
+Redis config:
+
+```text
+PLEDGE_REDIS_ADDR=127.0.0.1:6379
+PLEDGE_REDIS_PASSWORD=
+PLEDGE_REDIS_DB=0
+PLEDGE_PRICE_CACHE_TTL=30s
+```
+
+Run API with Redis cache:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_REDIS_ADDR=127.0.0.1:6379 \
+PLEDGE_PRICE_CACHE_TTL=30s \
+PLEDGE_API_PORT=8081 \
+go run ./cmd/api
+```
+
+Run scheduler with Redis cache:
+
+```bash
+cd pledgev2-rebackend
+PLEDGE_REDIS_ADDR=127.0.0.1:6379 \
+PLEDGE_PRICE_CACHE_TTL=30s \
+PLEDGE_SYNC_INTERVAL=30s \
+go run ./cmd/scheduler
+```
+
+Important:
+
+```text
+Redis must be running before starting the API or scheduler.
 ```
 
 ## Storage

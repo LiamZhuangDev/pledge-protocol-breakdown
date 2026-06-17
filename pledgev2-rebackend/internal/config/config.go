@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -18,6 +19,8 @@ const (
 	defaultTokenSecret = "local-development-secret"
 	defaultPriceSymbol = "PLGR"
 	defaultStoreDriver = "memory"
+	defaultRedisAddr   = "127.0.0.1:6379"
+	defaultPriceTTL    = 30 * time.Second
 )
 
 type Config struct {
@@ -33,6 +36,10 @@ type Config struct {
 	PriceSymbol   string
 	StoreDriver   string
 	MySQLDSN      string
+	RedisAddress  string
+	RedisPassword string
+	RedisDB       int
+	PriceCacheTTL time.Duration
 }
 
 func Load() Config {
@@ -49,6 +56,10 @@ func Load() Config {
 		PriceSymbol:   readEnv("PLEDGE_PRICE_SYMBOL", defaultPriceSymbol),
 		StoreDriver:   strings.ToLower(readEnv("PLEDGE_STORE", defaultStoreDriver)),
 		MySQLDSN:      readEnv("PLEDGE_MYSQL_DSN", ""),
+		RedisAddress:  readEnv("PLEDGE_REDIS_ADDR", defaultRedisAddr),
+		RedisPassword: readEnv("PLEDGE_REDIS_PASSWORD", ""),
+		RedisDB:       readIntEnv("PLEDGE_REDIS_DB", 0),
+		PriceCacheTTL: readDurationEnv("PLEDGE_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
 }
 
@@ -71,4 +82,17 @@ func readDurationEnv(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return duration
+}
+
+func readIntEnv(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	var parsed int
+	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+		return fallback
+	}
+	return parsed
 }
