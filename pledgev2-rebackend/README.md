@@ -9,13 +9,14 @@ works.
 
 ```mermaid
 flowchart LR
-  Contract[PledgePool + Oracle reader] --> Scheduler[Scheduler worker]
-  Contract --> APIBootstrap[API startup sync]
-  Scheduler --> Store[(Memory or MySQL store)]
+  Contract[PledgePool + Oracle reader] --> APIBootstrap[API startup sync]
+  Contract --> Scheduler[Scheduler worker]
+  Scheduler --> Store[(MySQL store)]
   APIBootstrap --> Store
-  Price[Demo price provider] --> Cache[(Memory or Redis cache)]
-  Cache --> API[API server]
-  Scheduler --> Cache
+  API[API server] --> PriceService[Price service]
+  Scheduler --> PriceService
+  PriceService --> Cache[(Redis price cache)]
+  PriceService --> Price[Demo price provider]
   Store --> API
   API --> Frontend[Frontend / curl]
 ```
