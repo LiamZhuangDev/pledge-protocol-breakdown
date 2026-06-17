@@ -1,0 +1,72 @@
+x-pledge-env: &pledge-env
+  PLEDGE_ENV: local
+  PLEDGE_CHAIN_ID: "97"
+  PLEDGE_API_VERSION: "1"
+  PLEDGE_STORE: mysql
+  PLEDGE_MYSQL_DSN: "pledge:pledge@tcp(mysql:3306)/pledge_rebackend?parseTime=true&charset=utf8mb4&loc=Local"
+  PLEDGE_REDIS_ADDR: redis:6379
+  PLEDGE_REDIS_PASSWORD: ""
+  PLEDGE_REDIS_DB: "0"
+  PLEDGE_PRICE_CACHE_TTL: 30s
+  PLEDGE_PRICE_SYMBOL: PLGR
+  PLEDGE_ADMIN_USERNAME: admin
+  PLEDGE_ADMIN_PASSWORD: password
+  PLEDGE_TOKEN_SECRET: local-secret
+  PLEDGE_TOKEN_TTL: 1h
+
+services:
+  api:
+    build: .
+    command: ["/app/api"]
+    environment:
+      <<: *pledge-env
+      PLEDGE_API_PORT: "8080"
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: ["/app/scheduler"]
+    environment:
+      <<: *pledge-env
+      PLEDGE_SYNC_INTERVAL: 30s
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: pledge_rebackend
+      MYSQL_USER: pledge
+      MYSQL_PASSWORD: pledge
+    ports:
+      - "3306:3306"
+    volumes:
+      - pledge_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u pledge --password=pledge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pledge_mysql_data:

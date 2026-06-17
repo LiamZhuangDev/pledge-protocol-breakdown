@@ -67,6 +67,54 @@ authCode: <tokenId>
 
 The `/api/v1` prefix uses `PLEDGE_API_VERSION=1`.
 
+## Docker Compose
+
+Run the rebuild stack with API, scheduler, MySQL, and Redis:
+
+```bash
+cd pledgev2-rebackend
+docker compose up --build
+```
+
+The API is exposed on your host at `http://localhost:8081`.
+
+Quick checks:
+
+```bash
+curl http://localhost:8081/healthz
+curl "http://localhost:8081/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8081/api/v1/price?symbol=PLGR"
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Remove the MySQL volume too:
+
+```bash
+docker compose down -v
+```
+
+- `Dockerfile` describes how to build your Go app image from source code.
+  Docker Compose needs instructions for turning api and scheduler repo into runnable binaries:
+  ```
+  RUN go build -o /out/api ./cmd/api
+  RUN go build -o /out/scheduler ./cmd/scheduler
+  ```
+
+- `docker-compose.yml` describes which containers to run together.
+  ```
+  run api
+  run scheduler
+  run mysql
+  run redis
+  connect them with env vars
+  expose API on localhost:8081
+  ```
+
 ## Cache
 
 The rebuild uses Redis for runtime caching. Currently Redis caches price quotes
