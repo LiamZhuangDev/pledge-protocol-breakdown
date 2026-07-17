@@ -1,6 +1,6 @@
 # pledgev2 rebuild
 
-This is a clean Hardhat project for rebuilding the `pledgev2` contracts from scratch for learning.
+This is a clean Hardhat project for rebuilding the `pledgev2` contracts with codex asistant. It is intended to test AI's capabilities and explore best practices for AI-assisted development.
 
 The original folders are left alone. Each rebuild checkpoint should add only the contracts and tests needed for that step.
 

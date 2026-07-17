@@ -1,7 +1,6 @@
 # pledgev2 rebackend
 
-This is a clean Go backend rebuild for learning how the original `pledge-backend`
-works.
+This is a clean Go backend rebuild of the original `pledge-backend` with codex asistant. It is intended to test AI's capabilities and explore best practices for AI-assisted development.
 
 - API server: serve frontend/admin HTTP APIs, token list, pool data, login, websocket price push.
 

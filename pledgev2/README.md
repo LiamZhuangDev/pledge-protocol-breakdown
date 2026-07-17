@@ -1,5 +1,6 @@
 # pledgeV2
-pledge V2 contract
+
+Reference implementation extracted from experience building blockchain infrastructure.
 
 ## 本地运行
 

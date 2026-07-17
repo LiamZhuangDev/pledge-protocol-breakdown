@@ -1,6 +1,8 @@
 # pledge-backend
 
-The project is divided into two parts, one is API and the other is scheduled task
+A reference implementation distilled from experience building blockchain infrastructure.
+
+The project is organized into two components: an API service and a scheduled task service.
 
 API
 
